@@ -331,6 +331,10 @@ p { margin: 0; }
 .vivo-form .btn { justify-self: start; }
 .err-txt { color: var(--crit-ink); }
 .drawer-b > p { font-size: 13.5px; }
+.drawer-b > .err-box { margin-top: 0; line-height: 1.5; }
+.drawer-b > .err-box .mono { word-break: break-word; }
+.pasos-cortos { margin: -8px 0 0; padding-left: 20px; display: grid; gap: 8px; font-size: 13.5px; line-height: 1.5; }
+.drawer-b .code-det > p { margin-top: 8px; }
 /* Meta del mes */
 .meta-line { margin-top: 10px; }
 .link-btn { border: 0; background: none; padding: 0; color: var(--accent-ink); font: inherit; font-size: 12.5px; font-weight: 650; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
@@ -1193,7 +1197,7 @@ p { margin: 0; }
 (function (RV) { RV.TARIFA = {"fecha":"23/10/2026","zonas":["Caba","Zona Oeste","Zona Norte","Zona Sur","Carga"],"cps":{"1000":[5516.5,0],"1001":[5516.5,0],"1002":[5516.5,0],"1003":[5516.5,0],"1004":[5516.5,0],"1005":[5516.5,0],"1006":[5516.5,0],"1007":[5516.5,0],"1008":[5516.5,0],"1009":[5516.5,0],"1010":[5516.5,0],"1011":[5516.5,0],"1012":[5516.5,0],"1013":[5516.5,0],"1014":[5516.5,0],"1015":[5516.5,0],"1016":[5516.5,0],"1017":[5516.5,0],"1018":[5516.5,0],"1019":[5516.5,0],"1020":[5516.5,0],"1021":[5516.5,0],"1022":[5516.5,0],"1023":[5516.5,0],"1024":[5516.5,0],"1025":[5516.5,0],"1026":[5516.5,0],"1027":[5516.5,0],"1028":[5516.5,0],"1029":[5516.5,0],"1030":[5516.5,0],"1031":[5516.5,0],"1032":[5516.5,0],"1033":[5516.5,0],"1034":[5516.5,0],"1035":[5516.5,0],"1036":[5516.5,0],"1037":[5516.5,0],"1038":[5516.5,0],"1039":[5516.5,0],"1040":[5516.5,0],"1041":[5516.5,0],"1042":[5516.5,0],"1043":[5516.5,0],"1044":[5516.5,0],"1045":[5516.5,0],"1046":[5516.5,0],"1047":[5516.5,0],"1048":[5516.5,0],"1049":[5516.5,0],"1050":[5516.5,0],"1051":[5516.5,0],"1052":[5516.5,0],"1053":[5516.5,0],"1054":[5516.5,0],"1055":[5516.5,0],"1056":[5516.5,0],"1057":[5516.5,0],"1058":[5516.5,0],"1059":[5516.5,0],"1060":[5516.5,0],"1061":[5516.5,0],"1062":[5516.5,0],"1063":[5516.5,0],"1064":[5516.5,0],"1065":[5516.5,0],"1066":[5516.5,0],"1067":[5516.5,0],"1068":[5516.5,0],"1069":[5516.5,0],"1070":[5516.5,0],"1071":[5516.5,0],"1072":[5516.5,0],"1073":[5516.5,0],"1074":[5516.5,0],"1075":[5516.5,0],"1076":[5516.5,0],"1077":[5516.5,0],"1078":[5516.5,0],"1079":[5516.5,0],"1080":[5516.5,0],"1081":[5516.5,0],"1082":[5516.5,0],"1083":[5516.5,0],"1084":[5516.5,0],"1085":[5516.5,0],"1086":[5516.5,0],"1087":[5516.5,0],"1088":[5516.5,0],"1089":[5516.5,0],"1090":[5516.5,0],"1091":[5516.5,0],"1092":[5516.5,0],"1093":[5516.5,0],"1094":[5516.5,0],"1095":[5516.5,0],"1096":[5516.5,0],"1097":[5516.5,0],"1098":[5516.5,0],"1099":[5516.5,0],"1100":[5516.5,0],"1101":[5516.5,0],"1102":[5516.5,0],"1103":[5516.5,0],"1104":[5516.5,0],"1105":[5516.5,0],"1106":[5516.5,0],"1107":[5516.5,0],"1108":[5516.5,0],"1109":[5516.5,0],"1110":[5516.5,0],"1111":[5516.5,0],"1112":[5516.5,0],"1113":[5516.5,0],"1114":[5516.5,0],"1115":[5516.5,0],"1116":[5516.5,0],"1117":[5516.5,0],"1118":[5516.5,0],"1119":[5516.5,0],"1120":[5516.5,0],"1121":[5516.5,0],"1122":[5516.5,0],"1123":[5516.5,0],"1124":[5516.5,0],"1125":[5516.5,0],"1126":[5516.5,0],"1127":[5516.5,0],"1128":[5516.5,0],"1129":[5516.5,0],"1130":[5516.5,0],"1131":[5516.5,0],"1132":[5516.5,0],"1133":[5516.5,0],"1134":[5516.5,0],"1135":[5516.5,0],"1136":[5516.5,0],"1137":[5516.5,0],"1138":[5516.5,0],"1139":[5516.5,0],"1140":[5516.5,0],"1141":[5516.5,0],"1142":[5516.5,0],"1143":[5516.5,0],"1144":[5516.5,0],"1145":[5516.5,0],"1146":[5516.5,0],"1147":[5516.5,0],"1148":[5516.5,0],"1149":[5516.5,0],"1150":[5516.5,0],"1151":[5516.5,0],"1152":[5516.5,0],"1153":[5516.5,0],"1154":[5516.5,0],"1155":[5516.5,0],"1156":[5516.5,0],"1157":[5516.5,0],"1158":[5516.5,0],"1159":[5516.5,0],"1160":[5516.5,0],"1161":[5516.5,0],"1162":[5516.5,0],"1163":[5516.5,0],"1164":[5516.5,0],"1165":[5516.5,0],"1166":[5516.5,0],"1167":[5516.5,0],"1168":[5516.5,0],"1169":[5516.5,0],"1170":[5516.5,0],"1171":[5516.5,0],"1172":[5516.5,0],"1173":[5516.5,0],"1174":[5516.5,0],"1175":[5516.5,0],"1176":[5516.5,0],"1177":[5516.5,0],"1178":[5516.5,0],"1179":[5516.5,0],"1180":[5516.5,0],"1181":[5516.5,0],"1182":[5516.5,0],"1183":[5516.5,0],"1184":[5516.5,0],"1185":[5516.5,0],"1186":[5516.5,0],"1187":[5516.5,0],"1188":[5516.5,0],"1189":[5516.5,0],"1190":[5516.5,0],"1191":[5516.5,0],"1192":[5516.5,0],"1193":[5516.5,0],"1194":[5516.5,0],"1195":[5516.5,0],"1196":[5516.5,0],"1197":[5516.5,0],"1198":[5516.5,0],"1199":[5516.5,0],"1200":[5516.5,0],"1201":[5516.5,0],"1202":[5516.5,0],"1203":[5516.5,0],"1204":[5516.5,0],"1205":[5516.5,0],"1206":[5516.5,0],"1207":[5516.5,0],"1208":[5516.5,0],"1209":[5516.5,0],"1210":[5516.5,0],"1211":[5516.5,0],"1212":[5516.5,0],"1213":[5516.5,0],"1214":[5516.5,0],"1215":[5516.5,0],"1216":[5516.5,0],"1217":[5516.5,0],"1218":[5516.5,0],"1219":[5516.5,0],"1220":[5516.5,0],"1221":[5516.5,0],"1222":[5516.5,0],"1223":[5516.5,0],"1224":[5516.5,0],"1225":[5516.5,0],"1226":[5516.5,0],"1227":[5516.5,0],"1228":[5516.5,0],"1229":[5516.5,0],"1230":[5516.5,0],"1231":[5516.5,0],"1232":[5516.5,0],"1233":[5516.5,0],"1234":[5516.5,0],"1235":[5516.5,0],"1236":[5516.5,0],"1237":[5516.5,0],"1238":[5516.5,0],"1239":[5516.5,0],"1240":[5516.5,0],"1241":[5516.5,0],"1242":[5516.5,0],"1243":[5516.5,0],"1244":[5516.5,0],"1245":[5516.5,0],"1246":[5516.5,0],"1247":[5516.5,0],"1248":[5516.5,0],"1249":[5516.5,0],"1250":[5516.5,0],"1251":[5516.5,0],"1252":[5516.5,0],"1253":[5516.5,0],"1254":[5516.5,0],"1255":[5516.5,0],"1256":[5516.5,0],"1257":[5516.5,0],"1258":[5516.5,0],"1259":[5516.5,0],"1260":[5516.5,0],"1261":[5516.5,0],"1262":[5516.5,0],"1263":[5516.5,0],"1264":[5516.5,0],"1265":[5516.5,0],"1266":[5516.5,0],"1267":[5516.5,0],"1268":[5516.5,0],"1269":[5516.5,0],"1270":[5516.5,0],"1271":[5516.5,0],"1272":[5516.5,0],"1273":[5516.5,0],"1274":[5516.5,0],"1275":[5516.5,0],"1276":[5516.5,0],"1277":[5516.5,0],"1278":[5516.5,0],"1279":[5516.5,0],"1280":[5516.5,0],"1281":[5516.5,0],"1282":[5516.5,0],"1283":[5516.5,0],"1284":[5516.5,0],"1285":[5516.5,0],"1286":[5516.5,0],"1287":[5516.5,0],"1288":[5516.5,0],"1289":[5516.5,0],"1290":[5516.5,0],"1291":[5516.5,0],"1292":[5516.5,0],"1293":[5516.5,0],"1294":[5516.5,0],"1295":[5516.5,0],"1296":[5516.5,0],"1297":[5516.5,0],"1298":[5516.5,0],"1299":[5516.5,0],"1300":[5516.5,0],"1301":[5516.5,0],"1302":[5516.5,0],"1303":[5516.5,0],"1304":[5516.5,0],"1305":[5516.5,0],"1306":[5516.5,0],"1307":[5516.5,0],"1308":[5516.5,0],"1309":[5516.5,0],"1310":[5516.5,0],"1311":[5516.5,0],"1312":[5516.5,0],"1313":[5516.5,0],"1314":[5516.5,0],"1315":[5516.5,0],"1316":[5516.5,0],"1317":[5516.5,0],"1318":[5516.5,0],"1319":[5516.5,0],"1320":[5516.5,0],"1321":[5516.5,0],"1322":[5516.5,0],"1323":[5516.5,0],"1324":[5516.5,0],"1325":[5516.5,0],"1326":[5516.5,0],"1327":[5516.5,0],"1328":[5516.5,0],"1329":[5516.5,0],"1330":[5516.5,0],"1331":[5516.5,0],"1332":[5516.5,0],"1333":[5516.5,0],"1334":[5516.5,0],"1335":[5516.5,0],"1336":[5516.5,0],"1337":[5516.5,0],"1338":[5516.5,0],"1339":[5516.5,0],"1340":[5516.5,0],"1341":[5516.5,0],"1342":[5516.5,0],"1343":[5516.5,0],"1344":[5516.5,0],"1345":[5516.5,0],"1346":[5516.5,0],"1347":[5516.5,0],"1348":[5516.5,0],"1349":[5516.5,0],"1350":[5516.5,0],"1351":[5516.5,0],"1352":[5516.5,0],"1353":[5516.5,0],"1354":[5516.5,0],"1355":[5516.5,0],"1356":[5516.5,0],"1357":[5516.5,0],"1358":[5516.5,0],"1359":[5516.5,0],"1360":[5516.5,0],"1361":[5516.5,0],"1362":[5516.5,0],"1363":[5516.5,0],"1364":[5516.5,0],"1365":[5516.5,0],"1366":[5516.5,0],"1367":[5516.5,0],"1368":[5516.5,0],"1369":[5516.5,0],"1370":[5516.5,0],"1371":[5516.5,0],"1372":[5516.5,0],"1373":[5516.5,0],"1374":[5516.5,0],"1375":[5516.5,0],"1376":[5516.5,0],"1377":[5516.5,0],"1378":[5516.5,0],"1379":[5516.5,0],"1380":[5516.5,0],"1381":[5516.5,0],"1382":[5516.5,0],"1383":[5516.5,0],"1384":[5516.5,0],"1385":[5516.5,0],"1386":[5516.5,0],"1387":[5516.5,0],"1388":[5516.5,0],"1389":[5516.5,0],"1390":[5516.5,0],"1391":[5516.5,0],"1392":[5516.5,0],"1393":[5516.5,0],"1394":[5516.5,0],"1395":[5516.5,0],"1396":[5516.5,0],"1397":[5516.5,0],"1398":[5516.5,0],"1399":[5516.5,0],"1400":[5516.5,0],"1401":[5516.5,0],"1402":[5516.5,0],"1403":[5516.5,0],"1404":[5516.5,0],"1405":[5516.5,0],"1406":[5516.5,0],"1407":[5516.5,0],"1408":[5516.5,0],"1409":[5516.5,0],"1410":[5516.5,0],"1411":[5516.5,0],"1412":[5516.5,0],"1413":[5516.5,0],"1414":[5516.5,0],"1415":[5516.5,0],"1416":[5516.5,0],"1417":[5516.5,0],"1418":[5516.5,0],"1419":[5516.5,0],"1420":[5516.5,0],"1421":[5516.5,0],"1422":[5516.5,0],"1423":[5516.5,0],"1424":[5516.5,0],"1425":[5516.5,0],"1426":[5516.5,0],"1427":[5516.5,0],"1428":[5516.5,0],"1429":[5516.5,0],"1430":[5516.5,0],"1431":[5516.5,0],"1432":[5516.5,0],"1433":[5516.5,0],"1434":[5516.5,0],"1435":[5516.5,0],"1436":[5516.5,0],"1437":[5516.5,0],"1438":[5516.5,0],"1439":[5516.5,0],"1440":[5516.5,0],"1808":[7386.5,1],"1809":[7386.5,1],"1812":[7386.5,1],"1814":[7386.5,1],"1815":[7386.5,1],"1816":[7386.5,1],"7221":[7386.5,1],"1686":[3816.5,1],"1714":[3816.5,1],"1704":[5516.5,1],"1751":[5516.5,1],"1752":[5516.5,1],"1754":[5516.5,1],"1757":[5516.5,1],"1759":[7386.5,1],"1763":[7386.5,1],"1778":[7386.5,1],"1801":[7386.5,1],"1803":[7386.5,1],"6700":[7386.5,1],"6701":[7386.5,1],"6703":[7386.5,1],"6706":[7386.5,1],"6708":[7386.5,1],"1716":[5516.5,1],"1718":[5516.5,1],"1722":[5516.5,1],"1727":[5516.5,1],"1736":[5516.5,1],"1742":[5516.5,1],"1743":[5516.5,1],"1744":[5516.5,1],"1745":[5516.5,1],"1748":[5516.5,1],"1684":[3816.5,1],"1685":[3816.5,1],"1706":[3816.5,1],"1708":[3816.5,1],"1712":[3816.5,1],"1663":[5516.5,1],"1674":[5516.5,1],"1678":[5516.5,1],"1702":[5516.5,1],"1723":[7386.5,1],"1766":[7386.5,1],"1770":[7386.5,1],"1683":[7386.5,1],"1768":[7386.5,1],"1688":[3816.5,1],"1675":[7386.5,1],"1761":[7386.5,1],"1765":[7386.5,1],"6702":[7386.5,1],"1785":[7386.5,1],"1703":[7386.5,1],"1755":[7386.5,1],"1662":[7386.5,1],"1758":[7386.5,1],"1687":[7386.5,1],"1715":[3816.5,1],"1664":[5516.5,1],"1676":[5516.5,1],"1682":[5516.5,1],"1661":[5516.5,1],"1750":[7386.5,1],"2802":[7386.5,2],"2804":[7386.5,2],"1619":[7386.5,2],"1620":[7386.5,2],"1623":[7386.5,2],"1625":[7386.5,2],"2816":[7386.5,2],"1660":[7386.5,2],"1665":[7386.5,2],"1666":[7386.5,2],"1613":[7386.5,2],"1616":[7386.5,2],"1627":[7386.5,2],"1629":[7386.5,2],"1631":[7386.5,2],"1635":[7386.5,2],"1669":[7386.5,2],"1644":[7386.5,2],"1646":[7386.5,2],"1609":[7386.5,2],"1640":[7386.5,2],"1641":[7386.5,2],"1642":[7386.5,2],"1643":[7386.5,2],"1650":[7386.5,2],"1653":[7386.5,2],"1655":[7386.5,2],"1611":[7386.5,2],"1617":[7386.5,2],"1621":[7386.5,2],"1622":[7386.5,2],"1648":[7386.5,2],"1602":[7386.5,2],"1603":[7386.5,2],"1605":[7386.5,2],"1607":[7386.5,2],"1636":[7386.5,2],"1638":[7386.5,2],"2800":[7386.5,2],"2806":[7386.5,2],"2808":[7386.5,2],"1651":[7386.5,2],"1637":[7386.5,2],"1633":[7386.5,2],"1608":[7386.5,2],"1630":[7386.5,2],"1618":[7386.5,2],"1628":[7386.5,2],"1615":[7386.5,2],"1606":[7386.5,2],"1614":[7386.5,2],"1634":[7386.5,2],"1612":[7386.5,2],"1624":[7386.5,2],"1670":[7386.5,2],"1604":[7386.5,2],"1846":[7386.5,3],"1849":[7386.5,3],"1852":[7386.5,3],"1862":[7386.5,3],"1868":[7386.5,3],"1870":[7386.5,3],"1872":[7386.5,3],"1873":[7386.5,3],"1874":[7386.5,3],"1875":[7386.5,3],"1880":[7386.5,3],"1881":[7386.5,3],"1884":[7386.5,3],"1923":[7386.5,3],"1842":[7386.5,3],"1804":[7386.5,3],"1806":[7386.5,3],"1888":[7386.5,3],"1892":[7386.5,3],"1893":[7386.5,3],"1894":[7386.5,3],"1896":[7386.5,3],"1897":[7386.5,3],"1900":[7386.5,3],"1901":[7386.5,3],"1902":[7386.5,3],"1903":[7386.5,3],"1907":[7386.5,3],"1914":[7386.5,3],"1925":[7386.5,3],"1926":[7386.5,3],"1931":[7386.5,3],"1824":[7386.5,3],"1825":[7386.5,3],"1826":[7386.5,3],"1828":[7386.5,3],"1832":[7386.5,3],"1834":[7386.5,3],"1876":[7386.5,3],"1878":[7386.5,3],"1879":[7386.5,3],"1865":[7386.5,3],"1772":[7386.5,3],"1886":[7386.5,3],"1838":[7386.5,3],"1823":[7386.5,3],"1906":[7386.5,3],"1836":[7386.5,3],"1885":[7386.5,3],"1887":[7386.5,3],"1890":[7386.5,3],"1908":[7386.5,3],"1877":[7386.5,3],"1854":[7386.5,3],"1864":[7386.5,3],"1889":[7386.5,3],"1904":[7386.5,3],"1851":[7386.5,3],"1821":[7386.5,3],"1805":[7386.5,3],"1856":[7386.5,3],"1847":[7386.5,3],"1839":[7386.5,3],"1910":[7386.5,3],"1841":[7386.5,3],"1883":[7386.5,3],"1871":[7386.5,3],"1861":[7386.5,3],"1822":[7386.5,3],"1845":[7386.5,3],"1882":[7386.5,3],"1853":[7386.5,3],"1843":[7386.5,3]},"nota":"Copia propia de la página (tomada del tarifario por zona del 23/10/2026). Los CP nuevos se suman desde la pestaña «CPs a AGREGAR» de ANALISIS DE PRODUCTOS."}; })(globalThis.RV = globalThis.RV || {});
 
 /* Generado por build.py desde src/appsscript: el código que se pega en script.google.com. */
-(function (RV) { RV.CODIGO_CONEXION = {"gs": "/**\n * Reporte de Ventas — conexión de SOLO LECTURA con «ANALISIS DE PRODUCTOS».\n *\n * Qué hace: cuando la página del reporte lo pide (con la clave de abajo), lee las pestañas que\n * necesita de la planilla y se las devuelve. Tiene permiso solo para VER hojas de cálculo\n * (ver appsscript.json): no puede escribir, borrar ni compartir nada.\n *\n * Cómo se instala: ver los pasos en la página (botón «Conectar en vivo»).\n */\nconst PLANILLA_ID = '1Cnox1BsgOaPEg4lVh4BJTOd4yLCY60MMlMiPLOVSX2M'; // ANALISIS DE PRODUCTOS\nconst CLAVE = '__CLAVE__';                                         // la misma que tiene la página\nconst PESTANAS = ['TITULARES', 'MAPPING', 'EXCEPCIONES', 'Pedidos', 'GASTOS GRUPALES', 'Consulta stock',\n  'CPs a AGREGAR', 'CUOTAS', 'En STOCK'];\nconst MINUTOS_EN_MEMORIA = 5;                                      // si 5 personas abren a la vez, se lee una sola vez\n\nfunction doGet(e) {\n  const p = (e && e.parameter) || {};\n  if (!p.k || p.k !== CLAVE) return responder_({ ok: false, error: 'clave' }, p.callback);\n  if (p.prueba) return responder_({ ok: true, prueba: true, version: 1 }, p.callback);\n  const memoria = CacheService.getScriptCache();\n  let texto = p.fresco ? null : leerMemoria_(memoria);\n  if (!texto) {\n    texto = JSON.stringify(leerPlanilla_());\n    guardarMemoria_(memoria, texto);\n  }\n  if (p.callback) return ContentService.createTextOutput(nombreSeguro_(p.callback) + '(' + texto + ');').setMimeType(ContentService.MimeType.JAVASCRIPT);\n  return ContentService.createTextOutput(texto).setMimeType(ContentService.MimeType.JSON);\n}\n\nfunction leerPlanilla_() {\n  const libro = SpreadsheetApp.openById(PLANILLA_ID);\n  const zona = libro.getSpreadsheetTimeZone();\n  const quiero = PESTANAS.map(normal_);\n  const hojas = {};\n  libro.getSheets().forEach(function (hoja) {\n    if (quiero.indexOf(normal_(hoja.getName())) === -1) return;\n    const valores = hoja.getDataRange().getValues().map(function (fila) {\n      return fila.map(function (v) {\n        return (v instanceof Date) ? '@@fecha:' + Utilities.formatDate(v, zona, \"yyyy-MM-dd'T'HH:mm:ss\") : v;\n      });\n    });\n    hojas[hoja.getName()] = recortar_(valores);\n  });\n  return { ok: true, version: 1, planilla: libro.getName(), leida: new Date().toISOString(), hojas: hojas };\n}\n\nfunction normal_(s) { return String(s).toLowerCase().replace(/\\s+/g, ' ').trim(); }\nfunction vacio_(v) { return v === '' || v === null; }\nfunction recortar_(filas) { // saca filas y columnas vacías del final (la planilla tiene cientos de filas en blanco)\n  let n = filas.length;\n  while (n > 0 && filas[n - 1].every(vacio_)) n--;\n  filas = filas.slice(0, n);\n  let cols = 0;\n  filas.forEach(function (f) { for (let c = f.length; c > cols; c--) { if (!vacio_(f[c - 1])) { cols = c; break; } } });\n  return filas.map(function (f) { return f.slice(0, cols); });\n}\nfunction nombreSeguro_(s) { return String(s).replace(/[^\\w.$]/g, '').slice(0, 64) || 'cb'; }\nfunction responder_(objeto, callback) {\n  const texto = JSON.stringify(objeto);\n  if (callback) return ContentService.createTextOutput(nombreSeguro_(callback) + '(' + texto + ');').setMimeType(ContentService.MimeType.JAVASCRIPT);\n  return ContentService.createTextOutput(texto).setMimeType(ContentService.MimeType.JSON);\n}\nfunction leerMemoria_(memoria) {\n  const n = Number(memoria.get('partes') || 0);\n  if (!n) return null;\n  const claves = [];\n  for (let i = 0; i < n; i++) claves.push('p' + i);\n  const partes = memoria.getAll(claves);\n  let texto = '';\n  for (let i = 0; i < n; i++) { if (partes['p' + i] == null) return null; texto += partes['p' + i]; }\n  return texto;\n}\nfunction guardarMemoria_(memoria, texto) {\n  const TAM = 40000, o = {};\n  let n = 0;\n  for (let i = 0; i < texto.length; i += TAM) o['p' + (n++)] = texto.slice(i, i + TAM);\n  o.partes = String(n);\n  try { memoria.putAll(o, MINUTOS_EN_MEMORIA * 60); } catch (err) { /* si no entra en memoria, no pasa nada */ }\n}\n\n/** Para probar desde el editor: elegí «probar» arriba y tocá «Ejecutar». En el registro se ven las pestañas leídas. */\nfunction probar() {\n  const r = leerPlanilla_();\n  Logger.log('Planilla: ' + r.planilla);\n  Object.keys(r.hojas).forEach(function (k) { Logger.log(k + ': ' + r.hojas[k].length + ' filas'); });\n}\n", "manifest": "{\n  \"timeZone\": \"America/Argentina/Buenos_Aires\",\n  \"runtimeVersion\": \"V8\",\n  \"exceptionLogging\": \"STACKDRIVER\",\n  \"oauthScopes\": [\"https://www.googleapis.com/auth/spreadsheets.readonly\"],\n  \"webapp\": { \"executeAs\": \"USER_DEPLOYING\", \"access\": \"ANYONE_ANONYMOUS\" }\n}\n"}; })(globalThis.RV = globalThis.RV || {});
+(function (RV) { RV.CODIGO_CONEXION = {"gs": "/**\n * Reporte de Ventas — conexión de SOLO LECTURA con «ANALISIS DE PRODUCTOS».\n *\n * Qué hace: cuando la página del reporte lo pide (con la clave de abajo), lee las pestañas que\n * necesita de la planilla y se las devuelve. Lee con el servicio «Google Sheets API», con permiso\n * solo para VER hojas de cálculo (ver appsscript.json): no puede escribir, borrar ni compartir nada.\n *\n * Cómo se instala: ver los pasos en la página (botón «Conectar en vivo»).\n * Versión 2 (3/11/2026): la versión 1 usaba SpreadsheetApp, que Google no deja usar con el permiso\n * de solo lectura; esta lee con la API de Sheets (que sí lo acepta) y, si algo falla, le dice a la\n * página el motivo en vez de mostrar la pantalla de error de Google.\n */\nconst PLANILLA_ID = '1Cnox1BsgOaPEg4lVh4BJTOd4yLCY60MMlMiPLOVSX2M'; // ANALISIS DE PRODUCTOS\nconst CLAVE = '__CLAVE__';                                         // la misma que tiene la página\nconst PESTANAS = ['TITULARES', 'MAPPING', 'EXCEPCIONES', 'Pedidos', 'GASTOS GRUPALES', 'Consulta stock',\n  'CPs a AGREGAR', 'CUOTAS', 'En STOCK'];\nconst MINUTOS_EN_MEMORIA = 5;                                      // si 5 personas abren a la vez, se lee una sola vez\nconst VERSION = 2;\n\nfunction doGet(e) {\n  const p = (e && e.parameter) || {};\n  if (!p.k || p.k !== CLAVE) return responder_({ ok: false, error: 'clave' }, p.callback);\n  try {\n    // Modo prueba: lee solo el nombre de la planilla (así ya se sabe si hay acceso)\n    if (p.prueba) return responder_({ ok: true, prueba: true, version: VERSION, planilla: libro_('properties(title)').properties.title }, p.callback);\n    const memoria = CacheService.getScriptCache();\n    let texto = p.fresco ? null : leerMemoria_(memoria);\n    if (!texto) {\n      texto = JSON.stringify(leerPlanilla_());\n      guardarMemoria_(memoria, texto);\n    }\n    if (p.callback) return ContentService.createTextOutput(nombreSeguro_(p.callback) + '(' + texto + ');').setMimeType(ContentService.MimeType.JAVASCRIPT);\n    return ContentService.createTextOutput(texto).setMimeType(ContentService.MimeType.JSON);\n  } catch (err) {\n    return responder_(explicarError_(err), p.callback);\n  }\n}\n\nfunction libro_(campos) {\n  if (typeof Sheets === 'undefined') throw new Error('SIN_SERVICIO_SHEETS');\n  return Sheets.Spreadsheets.get(PLANILLA_ID, { fields: campos });\n}\n\nfunction leerPlanilla_() {\n  const libro = libro_('properties(title),sheets(properties(title,sheetType))');\n  const quiero = PESTANAS.map(normal_);\n  const nombres = (libro.sheets || []).map(function (h) { return h.properties || {}; })\n    .filter(function (pr) { return (!pr.sheetType || pr.sheetType === 'GRID') && quiero.indexOf(normal_(pr.title)) !== -1; })\n    .map(function (pr) { return pr.title; });\n  const hojas = {};\n  if (nombres.length) {\n    const rangos = nombres.map(function (n) { return \"'\" + String(n).replace(/'/g, \"''\") + \"'\"; });\n    const leer = function (fechas) {\n      return Sheets.Spreadsheets.Values.batchGet(PLANILLA_ID, { ranges: rangos, majorDimension: 'ROWS', valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: fechas }).valueRanges || [];\n    };\n    // Dos lecturas: en la primera las fechas vienen como número de serie y en la segunda como texto.\n    // Así se sabe qué celdas son fechas (número en una, texto en la otra) y se manda la fecha exacta.\n    // Si alguien editó la planilla justo entre las dos lecturas, no coinciden: se vuelve a leer.\n    let numeros, textos;\n    for (let intento = 1; intento <= 3; intento++) {\n      numeros = leer('SERIAL_NUMBER'); textos = leer('FORMATTED_STRING');\n      if (coinciden_(numeros, textos)) break;\n      if (intento < 3) Utilities.sleep(1000);\n    }\n    nombres.forEach(function (nombre, i) {\n      const a = (numeros[i] && numeros[i].values) || [], b = (textos[i] && textos[i].values) || [];\n      let ancho = 0;\n      a.forEach(function (fila) { if (fila && fila.length > ancho) ancho = fila.length; });\n      const filas = a.map(function (fila, r) {\n        const out = [];\n        for (let c = 0; c < ancho; c++) {\n          const v = fila && c < fila.length ? fila[c] : '';\n          const t = b[r] && b[r][c];\n          out.push(typeof v === 'number' && typeof t === 'string' ? '@@fecha:' + fechaDeSerie_(v) : (v == null ? '' : v));\n        }\n        return out;\n      });\n      hojas[nombre] = recortar_(filas);\n    });\n  }\n  return { ok: true, version: VERSION, planilla: libro.properties.title, leida: new Date().toISOString(), hojas: hojas };\n}\n\n// Las dos lecturas tienen que ser iguales salvo en las fechas (número en una, texto en la otra)\nfunction coinciden_(A, B) {\n  if (A.length !== B.length) return false;\n  for (let i = 0; i < A.length; i++) {\n    const a = (A[i] && A[i].values) || [], b = (B[i] && B[i].values) || [];\n    if (a.length !== b.length) return false;\n    for (let r = 0; r < a.length; r++) {\n      const fa = a[r] || [], fb = b[r] || [];\n      if (fa.length !== fb.length) return false;\n      for (let c = 0; c < fa.length; c++) {\n        const x = fa[c], y = fb[c];\n        if (typeof x === 'number' ? !(y === x || typeof y === 'string') : x !== y) return false;\n      }\n    }\n  }\n  return true;\n}\n\n// Número de serie de Sheets (días desde el 30/12/1899, con la hora como fracción) → \"2026-10-28T14:30:00\"\nfunction fechaDeSerie_(s) {\n  const d = new Date(Math.round((s - 25569) * 86400) * 1000);\n  const dos = function (n) { return (n < 10 ? '0' : '') + n; };\n  return d.getUTCFullYear() + '-' + dos(d.getUTCMonth() + 1) + '-' + dos(d.getUTCDate()) + 'T' +\n    dos(d.getUTCHours()) + ':' + dos(d.getUTCMinutes()) + ':' + dos(d.getUTCSeconds());\n}\n\n// El motivo de la falla, en palabras que la página entiende\nfunction explicarError_(err) {\n  const m = String((err && err.message) || err || 'error');\n  const r = function (error) { return { ok: false, error: error, version: VERSION, detalle: m.slice(0, 400) }; };\n  if (m === 'SIN_SERVICIO_SHEETS' || /Sheets is not defined|has not been used in project|is disabled|SERVICE_DISABLED|accessNotConfigured/i.test(m)) return r('servicio');\n  if (/Specified permissions are not sufficient|insufficient authentication scopes|ACCESS_TOKEN_SCOPE_INSUFFICIENT/i.test(m)) return r('alcance');\n  if (/Quota exceeded|RESOURCE_EXHAUSTED|Rate Limit|too many|\\b429\\b/i.test(m)) return r('cuota');\n  if (/does not have permission|PERMISSION_DENIED|not have access|no tiene permiso|status 403|\\b403\\b/i.test(m)) return r('permiso');\n  if (/Requested entity was not found|NOT_FOUND|\\b404\\b/i.test(m)) return r('permiso');\n  return r('lectura');\n}\nconst CONSEJOS_ = {\n  servicio: 'Falta activar «Google Sheets API»: reemplazá appsscript.json por el de la página, guardá y volvé a probar.',\n  alcance: 'El permiso no alcanza: reemplazá appsscript.json por el de la página, guardá y volvé a probar.',\n  permiso: 'La cuenta de Google con la que estás (arriba a la derecha) no puede abrir ANALISIS DE PRODUCTOS. Compartí ANALISIS con esta cuenta como «Lector», o creá la conexión desde una cuenta que ya la abra.',\n  cuota: 'Google frenó las lecturas por un rato (demasiadas seguidas). Probá de nuevo en unos minutos.',\n  lectura: 'Copiá este mensaje y mandáselo a quien te ayude con la página.',\n};\n\nfunction normal_(s) { return String(s).toLowerCase().replace(/\\s+/g, ' ').trim(); }\nfunction vacio_(v) { return v === '' || v === null; }\nfunction recortar_(filas) { // saca filas y columnas vacías del final (la planilla tiene cientos de filas en blanco)\n  let n = filas.length;\n  while (n > 0 && filas[n - 1].every(vacio_)) n--;\n  filas = filas.slice(0, n);\n  let cols = 0;\n  filas.forEach(function (f) { for (let c = f.length; c > cols; c--) { if (!vacio_(f[c - 1])) { cols = c; break; } } });\n  return filas.map(function (f) { return f.slice(0, cols); });\n}\nfunction nombreSeguro_(s) { return String(s).replace(/[^\\w.$]/g, '').slice(0, 64) || 'cb'; }\nfunction responder_(objeto, callback) {\n  const texto = JSON.stringify(objeto);\n  if (callback) return ContentService.createTextOutput(nombreSeguro_(callback) + '(' + texto + ');').setMimeType(ContentService.MimeType.JAVASCRIPT);\n  return ContentService.createTextOutput(texto).setMimeType(ContentService.MimeType.JSON);\n}\nfunction leerMemoria_(memoria) {\n  const n = Number(memoria.get('partes') || 0);\n  if (!n) return null;\n  const claves = [];\n  for (let i = 0; i < n; i++) claves.push('p' + i);\n  const partes = memoria.getAll(claves);\n  let texto = '';\n  for (let i = 0; i < n; i++) { if (partes['p' + i] == null) return null; texto += partes['p' + i]; }\n  return texto;\n}\nfunction guardarMemoria_(memoria, texto) {\n  const TAM = 40000, o = {};\n  let n = 0;\n  for (let i = 0; i < texto.length; i += TAM) o['p' + (n++)] = texto.slice(i, i + TAM);\n  o.partes = String(n);\n  try { memoria.putAll(o, MINUTOS_EN_MEMORIA * 60); } catch (err) { /* si no entra en memoria, no pasa nada */ }\n}\n\n/**\n * Para probar desde el editor: arriba elegí «probar» y tocá «Ejecutar».\n * Abajo, en el «Registro de ejecución», dice si pudo leer ANALISIS y, si no, qué hacer.\n */\nfunction probar() {\n  try {\n    const r = leerPlanilla_();\n    Logger.log('OK: la conexión puede leer «' + r.planilla + '» (solo lectura). Pestañas leídas:');\n    Object.keys(r.hojas).forEach(function (k) { Logger.log('   ' + k + ': ' + r.hojas[k].length + ' filas'); });\n    const leidas = Object.keys(r.hojas).map(normal_);\n    const faltan = PESTANAS.filter(function (n) { return leidas.indexOf(normal_(n)) === -1; });\n    if (faltan.length) Logger.log('No encontré estas pestañas (si se cambiaron de nombre, la página no las va a ver): ' + faltan.join(', '));\n  } catch (err) {\n    const e = explicarError_(err);\n    Logger.log('NO PUDO LEER ANALISIS. Motivo que da Google: ' + e.detalle);\n    Logger.log('Qué hacer: ' + CONSEJOS_[e.error]);\n  }\n}\n", "manifest": "{\n  \"timeZone\": \"America/Argentina/Buenos_Aires\",\n  \"runtimeVersion\": \"V8\",\n  \"exceptionLogging\": \"STACKDRIVER\",\n  \"dependencies\": {\n    \"enabledAdvancedServices\": [\n      { \"userSymbol\": \"Sheets\", \"serviceId\": \"sheets\", \"version\": \"v4\" }\n    ]\n  },\n  \"oauthScopes\": [\"https://www.googleapis.com/auth/spreadsheets.readonly\"],\n  \"webapp\": { \"executeAs\": \"USER_DEPLOYING\", \"access\": \"ANYONE_ANONYMOUS\" }\n}\n"}; })(globalThis.RV = globalThis.RV || {});
 
 /* ============================================================
    parsers.js — leer los archivos de Meli / Mercado Pago y las
@@ -1844,12 +1848,16 @@ p { margin: 0; }
       data = await jsonp(url); // si el fetch falla (bloqueo del navegador), JSONP
     }
     if (!data || data.ok !== true) {
-      const err = new Error(data && data.error === 'clave' ? 'la clave no coincide con la del código publicado' : 'la conexión respondió algo inesperado');
-      err.code = data && data.error === 'clave' ? 'clave' : 'respuesta';
+      // La versión 2 del código dice por qué no pudo leer: clave, servicio, alcance, permiso, cuota o lectura
+      const code = data && CODIGOS_VIVO.includes(data.error) ? data.error : 'respuesta';
+      const detalle = data && data.detalle ? String(data.detalle).slice(0, 400) : '';
+      const err = new Error(code === 'clave' ? 'la clave no coincide con la del código publicado' : detalle || 'la conexión respondió algo inesperado');
+      err.code = code; err.detalle = detalle; err.version = data && data.version;
       throw err;
     }
     return data;
   };
+  const CODIGOS_VIVO = ['clave', 'servicio', 'alcance', 'permiso', 'cuota', 'lectura'];
   S.probarVivo = (cx) => S.pedirVivo(cx, { prueba: '1' });
   S.loadVivo = async (cx, onProgress, fresco) => {
     onProgress && onProgress('Leyendo ANALISIS DE PRODUCTOS en vivo…');
@@ -3459,6 +3467,7 @@ p { margin: 0; }
       return `<div class="file"><div class="file-ic ${ic[0]}">${ic[1]}</div><div class="file-main"><div class="file-t">${esc(titulo)} ${sel}</div><div class="file-n" title="${esc(f.name)}">${esc(detalle)} · ${esc(f.name)}</div></div><button class="x" type="button" data-action="quitar" data-id="${f.id}" aria-label="Quitar ${esc(f.name)}">×</button></div>`;
     };
     const m = st.model;
+    const vivoMal = !!(RV.app.vivoFallo && RV.app.vivoFallo());
     const planilla = st.modelStatus === 'ok' && m ? `<dl class="kv">
         <dt>Origen</dt><dd>${esc(R_.origenTxt(m))}</dd>
         <dt>Productos</dt><dd>${U.fmtInt(m.productos.size)}</dd>
@@ -3512,13 +3521,15 @@ p { margin: 0; }
         <div class="card side-card">
           <h3>Planilla de costos y stock</h3>
           ${planilla}
+          ${vivoMal && st.modelStatus === 'ok' ? `<p class="small" style="margin-top:10px;color:var(--warn-ink)">${icon('i-alert')} ${esc(st.vivoError.msg)}</p>` : ''}
           <div class="loader-actions" style="margin-top:12px">
+            ${vivoMal ? `<button class="btn btn-sm btn-primary" type="button" data-action="conectar-vivo">${icon('i-link')}Arreglar la conexión</button>` : ''}
             ${RV.app.puedeDrive() && st.driveState !== 'granted'
               ? `<button class="btn btn-sm" type="button" data-action="conectar-drive">${icon('i-link')}Leer ANALISIS DE PRODUCTOS desde Drive</button>`
               : RV.app.puedeVivo() && !st.conexion
                 ? `<button class="btn btn-sm btn-primary" type="button" data-action="conectar-vivo">${icon('i-link')}Conectar en vivo</button><span class="small muted">o soltá la planilla .xlsx</span>`
                 : `<button class="btn btn-sm" type="button" data-action="recargar-planilla">${icon('i-refresh')}Volver a leer</button>`}
-            ${RV.app.puedeVivo() && st.conexion ? `<button class="btn btn-sm btn-ghost" type="button" data-action="conectar-vivo">${icon('i-link')}Conexión en vivo</button>` : ''}
+            ${RV.app.puedeVivo() && st.conexion && !vivoMal ? `<button class="btn btn-sm btn-ghost" type="button" data-action="conectar-vivo">${icon('i-link')}Conexión en vivo</button>` : ''}
           </div>
         </div>
         <div class="card side-card">
@@ -3570,49 +3581,86 @@ p { margin: 0; }
   };
 
   // Panel «Conectar en vivo» (web): instalación del Apps Script de solo lectura, una sola vez
+  // (o su actualización, si ya existe y la última lectura falló)
+  const arregloVivo = (ve) => {
+    const leer = `<div class="share-actions"><button class="btn btn-primary" type="button" data-action="recargar-planilla">${icon('i-refresh')}Volver a leer</button></div>`;
+    if (['viejo', 'servicio', 'alcance'].includes(ve.code)) return `<p>Se arregla en unos 2 minutos, actualizando el código en script.google.com (la URL y el link del equipo no cambian).</p>
+      <div class="share-actions"><button class="btn btn-primary" type="button" data-action="vivo-codigo">Ver cómo actualizarla</button></div>`;
+    if (ve.code === 'permiso') return `<p><b>Cómo se arregla</b> (elegí una):</p>
+      <ol class="pasos-cortos">
+        <li><b>Compartir ANALISIS con esa cuenta</b>: abrí ANALISIS DE PRODUCTOS con una cuenta que la edite → <b>Compartir</b> → escribí el mail de la cuenta con la que creaste la conexión (la que aparecía en la pantalla de permisos de Google) → <b>Lector</b> → <b>Enviar</b>. Compartir no cambia nada del contenido de la planilla.</li>
+        <li><b>O crear la conexión desde una cuenta que ya abra ANALISIS</b>: tocá «Ver el código y los pasos» y seguí «Crearla de cero».</li>
+      </ol>${leer}`;
+    if (ve.code === 'cuota') return `<p>Esperá unos minutos y volvé a leer.</p>${leer}`;
+    return `<p>Para ver qué pasa: en <a href="https://script.google.com/home" target="_blank" rel="noopener noreferrer">script.google.com</a> abrí el proyecto, arriba elegí la función <b>probar</b> y tocá <b>Ejecutar</b> (Run). Abajo, en el registro, dice si pudo leer y qué hacer.</p>${leer}`;
+  };
   R_.conexion = (st) => {
-    const cx = st.conexion;
+    const cx = st.conexion, ve = RV.app.vivoFallo && RV.app.vivoFallo() ? st.vivoError : null;
     const h = `<div class="drawer-h"><div><div class="small muted">ANALISIS DE PRODUCTOS · solo lectura</div><h3 id="drawer-title">${cx ? 'Conexión en vivo' : 'Conectar en vivo'}</h3></div>
       <button class="icon-btn" type="button" data-action="cerrar-drawer" aria-label="Cerrar">${icon('i-x')}</button></div>`;
     if (cx && !st.verCodigo) {
       const m = st.model;
-      return h + `<div class="drawer-b">
-        <div class="ok-box">${icon('i-check')}<span>Este navegador lee ANALISIS DE PRODUCTOS en vivo${m && m.origen === 'vivo' ? ` (última lectura ${esc(U.relTime(m.leidaEn || m.fetchedAt))})` : ''}.</span></div>
+      const estado = ve
+        ? `<div class="err-box" role="alert"><b>La última lectura falló.</b> ${esc(ve.msg)}${ve.detalle ? `<details class="small" style="margin-top:6px"><summary>Lo que dice Google</summary><span class="mono">${esc(ve.detalle)}</span></details>` : ''}</div>${arregloVivo(ve)}`
+        : `<div class="ok-box">${icon('i-check')}<span>Este navegador lee ANALISIS DE PRODUCTOS en vivo${m && m.origen === 'vivo' ? ` (última lectura ${esc(U.relTime(m.leidaEn || m.fetchedAt))})` : ''}.</span></div>`;
+      return h + `<div class="drawer-b" data-panel="conexion">
+        ${estado}
         <div><div class="card-h" style="margin-bottom:6px"><h3 style="font-size:14px">Link para el equipo</h3></div>
-          <p class="small muted">Mandalo por WhatsApp a quien tenga que usar la página. Al abrirlo, su navegador queda conectado (no necesita cuenta de Google ni subir nada). Es privado: el que tenga el link puede leer la planilla.</p>
+          <p class="small muted">Mandalo por WhatsApp a quien tenga que usar la página. Al abrirlo, su navegador queda conectado (no necesita cuenta de Google ni subir nada). Es privado: el que tenga el link puede leer la planilla.${ve ? ' Cuando arregles la conexión, el mismo link sigue sirviendo.' : ''}</p>
           <input class="field mono" id="link-equipo" readonly value="${esc(RV.app.linkInvitacion())}" aria-label="Link para el equipo">
-          <div class="share-actions"><button class="btn btn-primary" type="button" data-action="copiar" data-que="link">${icon('i-copy')}Copiar link</button>
+          <div class="share-actions"><button class="btn${ve ? '' : ' btn-primary'}" type="button" data-action="copiar" data-que="link">${icon('i-copy')}Copiar link</button>
           <a class="btn" href="https://wa.me/?text=${encodeURIComponent('Link del reporte de ventas (conectado a ANALISIS): ' + RV.app.linkInvitacion())}" target="_blank" rel="noopener noreferrer">Mandar por WhatsApp</a></div></div>
         <div class="rows">
           <div><span>Volver a leer la planilla ahora</span><span class="r-v"><button class="btn btn-sm" type="button" data-action="recargar-planilla">${icon('i-refresh')}Leer</button></span></div>
           <div><span>Ver el código y los pasos otra vez</span><span class="r-v"><button class="btn btn-sm" type="button" data-action="vivo-codigo">Ver</button></span></div>
           <div><span>Desconectar este navegador</span><span class="r-v"><button class="btn btn-sm btn-ghost" type="button" data-action="vivo-desconectar">Desconectar</button></span></div>
         </div>
-        <p class="small muted">Para cortar el acceso de todos: en script.google.com cambiá la clave del código, volvé a implementar y mandá el link nuevo.</p>
+        <p class="small muted">Para cortar el acceso de todos: en script.google.com cambiá la clave del código, creá una versión nueva y mandá el link nuevo.</p>
       </div>`;
     }
     const clave = cx ? cx.clave : st.claveEnCurso;
     const paso = (n, html) => `<li><span class="paso-n">${n}</span><div>${html}</div></li>`;
-    return h + `<div class="drawer-b">
-      <p>Se hace <b>una sola vez</b> (5 minutos) desde una cuenta de Google que pueda ver ANALISIS DE PRODUCTOS. Después la página la lee sola cada vez que se abre, y el resto del equipo solo abre un link.</p>
-      <p class="small muted">Es un pequeño programa de Google (Apps Script) que queda en <b>tu</b> Google Drive. Tiene permiso solo para <b>ver</b> hojas de cálculo: no puede modificar, borrar ni compartir nada.</p>
-      <ol class="pasos">
-        ${paso(1, 'Entrá a <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener noreferrer">script.google.com</a> con tu cuenta de Google y creá un <b>proyecto nuevo</b>. Ponele de nombre «Reporte de Ventas – lectura».')}
-        ${paso(2, `Borrá lo que viene escrito en <span class="mono">Código.gs</span> y pegá este código (ya tiene la clave de tu conexión):
-          <div class="share-actions"><button class="btn btn-sm btn-primary" type="button" data-action="copiar" data-que="codigo">${icon('i-copy')}Copiar código</button></div>
-          <details class="code-det"><summary>Ver el código</summary><pre class="code">${esc(RV.app.codigoConexion(clave))}</pre></details>`)}
-        ${paso(3, `Tocá el engranaje <b>Configuración del proyecto</b> y marcá «Mostrar el archivo de manifiesto "appsscript.json" en el editor». Volvé al editor <b>(&lt;&gt;)</b>, abrí <span class="mono">appsscript.json</span> y reemplazá todo por esto (es lo que le da permiso <b>solo de lectura</b>):
-          <div class="share-actions"><button class="btn btn-sm" type="button" data-action="copiar" data-que="manifest">${icon('i-copy')}Copiar appsscript.json</button></div>
-          <details class="code-det"><summary>Ver appsscript.json</summary><pre class="code">${esc(RV.CODIGO_CONEXION ? RV.CODIGO_CONEXION.manifest : '')}</pre></details>`)}
-        ${paso(4, 'Guardá (ícono del disquete). Arriba a la derecha: <b>Implementar → Nueva implementación</b>. En el engranaje de «Seleccionar tipo» elegí <b>Aplicación web</b>. Ejecutar como: <b>Yo</b>. Quién tiene acceso: <b>Cualquier usuario</b> (no el que dice «con cuenta de Google»: así el resto del equipo no necesita iniciar sesión). Tocá <b>Implementar</b>.')}
-        ${paso(5, 'Google te pide permiso: elegí tu cuenta. Si aparece «Google no verificó esta app», tocá <b>Configuración avanzada → Ir a Reporte de Ventas – lectura (no seguro)</b> y <b>Permitir</b>. Es tu propio código y solo pide <b>ver</b> tus hojas de cálculo.')}
-        ${paso(6, `Copiá la <b>URL de la aplicación web</b> (termina en <span class="mono">/exec</span>) y pegala acá:
-          <form class="vivo-form" data-form="vivo" autocomplete="off">
+    const codigo = `<div class="share-actions"><button class="btn btn-sm btn-primary" type="button" data-action="copiar" data-que="codigo">${icon('i-copy')}Copiar código</button></div>
+          <details class="code-det"><summary>Ver el código</summary><pre class="code">${esc(RV.app.codigoConexion(clave))}</pre></details>`;
+    const manifiesto = `<div class="share-actions"><button class="btn btn-sm" type="button" data-action="copiar" data-que="manifest">${icon('i-copy')}Copiar appsscript.json</button></div>
+          <details class="code-det"><summary>Ver appsscript.json</summary><pre class="code">${esc(RV.CODIGO_CONEXION ? RV.CODIGO_CONEXION.manifest : '')}</pre></details>`;
+    const verManifiesto = 'Si no aparece en la lista de archivos: engranaje <b>Configuración del proyecto</b> (Project Settings) → marcá «Mostrar el archivo de manifiesto "appsscript.json" en el editor» y volvé al editor <b>(&lt;&gt;)</b>.';
+    const probar = 'Arriba, al lado de «Depurar» (Debug), elegí la función <b>probar</b> y tocá <b>Ejecutar</b> (Run). Abajo, en el <b>registro de ejecución</b>, tiene que decir «OK: la conexión puede leer…». Si dice «NO PUDO LEER», ahí mismo dice qué hacer.';
+    const permiso = 'Si Google pide permiso: elegí la cuenta; si aparece «Google no verificó esta app» (Google hasn’t verified this app), tocá <b>Configuración avanzada</b> (Advanced) → <b>Ir a Reporte de Ventas – lectura (no seguro)</b> → <b>Permitir</b> (Allow). Tiene que pedir <b>solo</b> «Ver todas tus hojas de cálculo» (See all your Google Sheets spreadsheets); si pide editar, el appsscript.json no es el de acá.';
+    const form = (boton) => `<form class="vivo-form" data-form="vivo" autocomplete="off">
             <label class="sr" for="vivo-url">URL de la aplicación web</label>
             <input class="field mono" id="vivo-url" placeholder="https://script.google.com/macros/s/…/exec" value="${cx ? esc(cx.url) : ''}" required>
-            <button class="btn btn-primary" type="submit">Probar y guardar</button>
+            <button class="btn btn-primary" type="submit">${boton}</button>
             <span class="vivo-msg small" role="status"></span>
-          </form>`)}
+          </form>`;
+    if (cx) {
+      // Ya existe: actualizar el mismo proyecto (misma URL, misma clave, mismo link del equipo)
+      return h + `<div class="drawer-b" data-panel="conexion">
+      <p><b>Actualizar la conexión</b> (2 minutos). Se hace en el mismo proyecto de Google: la URL, la clave y el link del equipo quedan iguales.</p>
+      <ol class="pasos">
+        ${paso(1, 'Entrá a <a href="https://script.google.com/home" target="_blank" rel="noopener noreferrer">script.google.com</a> con la cuenta con la que creaste la conexión y abrí el proyecto <b>«Reporte de Ventas – lectura»</b>.')}
+        ${paso(2, `En <span class="mono">Código.gs</span>: borrá todo y pegá el código nuevo (ya trae la misma clave):${codigo}`)}
+        ${paso(3, `En <span class="mono">appsscript.json</span>: borrá todo y pegá este (sigue siendo <b>solo lectura</b> y activa «Google Sheets API»). ${verManifiesto}${manifiesto}`)}
+        ${paso(4, `Guardá (ícono del disquete). ${probar} ${permiso}`)}
+        ${paso(5, '<b>Implementar</b> (Deploy) → <b>Gestionar implementaciones</b> (Manage deployments) → tocá el lápiz <b>Editar</b> (Edit) → en «Versión» elegí <b>Nueva versión</b> (New version) → <b>Implementar</b> (Deploy). Guardar el código solo no alcanza: lo que usa la página es la versión implementada.')}
+        ${paso(6, `Volvé acá y probá:${form('Probar de nuevo')}`)}
+      </ol>
+      <details class="code-det"><summary>Crearla de cero (por ejemplo, desde otra cuenta)</summary>
+        <p class="small">Hacé lo mismo en un <b>proyecto nuevo</b> (<a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener noreferrer">crear proyecto</a>) con una cuenta que pueda abrir ANALISIS, y en el paso 5 usá <b>Implementar → Nueva implementación</b>: tipo <b>Aplicación web</b>, Ejecutar como: <b>Yo</b>, Quién tiene acceso: <b>Cualquier usuario</b>. Después pegá la URL nueva en el paso 6 y mandá el link del equipo otra vez.</p>
+      </details>
+      <p class="small muted">Si algo falla, también podés seguir soltando ANALISIS en .xlsx: la página guarda la última copia.</p>
+    </div>`;
+    }
+    return h + `<div class="drawer-b" data-panel="conexion">
+      <p>Se hace <b>una sola vez</b> (5 minutos) desde una cuenta de Google que pueda abrir ANALISIS DE PRODUCTOS. Después la página la lee sola cada vez que se abre, y el resto del equipo solo abre un link.</p>
+      <p class="small muted">Es un pequeño programa de Google (Apps Script) que queda en <b>tu</b> Google Drive. Tiene permiso solo para <b>ver</b> hojas de cálculo: no puede modificar, borrar ni compartir nada.</p>
+      <ol class="pasos">
+        ${paso(1, 'Entrá a <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener noreferrer">script.google.com</a> con una cuenta que pueda abrir ANALISIS DE PRODUCTOS (la cuenta activa se ve arriba a la derecha) y creá un <b>proyecto nuevo</b>. Ponele de nombre «Reporte de Ventas – lectura».')}
+        ${paso(2, `Borrá lo que viene escrito en <span class="mono">Código.gs</span> y pegá este código (ya tiene la clave de tu conexión):${codigo}`)}
+        ${paso(3, `Abrí <span class="mono">appsscript.json</span> y reemplazá todo por esto (le da permiso <b>solo de lectura</b> y activa «Google Sheets API»). ${verManifiesto}${manifiesto}`)}
+        ${paso(4, `Guardá (ícono del disquete). ${probar} ${permiso}`)}
+        ${paso(5, 'Arriba a la derecha: <b>Implementar → Nueva implementación</b> (Deploy → New deployment). En el engranaje de «Seleccionar tipo» elegí <b>Aplicación web</b>. Ejecutar como: <b>Yo</b>. Quién tiene acceso: <b>Cualquier usuario</b> (no el que dice «con cuenta de Google»: así el resto del equipo no necesita iniciar sesión). Tocá <b>Implementar</b>.')}
+        ${paso(6, `Copiá la <b>URL de la aplicación web</b> (termina en <span class="mono">/exec</span>) y pegala acá:${form('Probar y guardar')}`)}
       </ol>
       <p class="small muted">Si algo falla, también podés seguir soltando ANALISIS en .xlsx: la página guarda la última copia.</p>
     </div>`;
@@ -4802,14 +4850,38 @@ p { margin: 0; }
     return [...r].map(x => abc[x % abc.length]).join('');
   };
   app.codigoConexion = (clave) => (RV.CODIGO_CONEXION ? RV.CODIGO_CONEXION.gs : '').replace('__CLAVE__', clave);
+  // Si la conexión responde con la clave correcta se guarda, aunque todavía no pueda leer (código viejo,
+  // cuenta sin acceso…): así, cuando se arregla del lado de Google, alcanza con «Volver a leer».
+  const GUARDABLES = ['viejo', 'servicio', 'alcance', 'permiso', 'cuota', 'lectura'];
   app.guardarConexion = async (url, clave) => {
     url = String(url || '').trim();
     if (!URL_VALIDA.test(url)) throw Object.assign(new Error('Ese link no parece el de una aplicación web de Apps Script (termina en /exec).'), { code: 'url' });
-    await S.probarVivo({ url, clave });
+    let aviso = null;
+    try {
+      const d = await S.probarVivo({ url, clave });
+      if (!(Number(d.version) >= 2)) aviso = Object.assign(new Error('código anterior'), { code: 'viejo' });
+    } catch (e) {
+      if (!GUARDABLES.includes(e.code)) throw e;
+      aviso = e;
+    }
     st.conexion = { url, clave }; U.store.set(KX, st.conexion);
+    st.vivoError = null;
+    if (aviso) {
+      st.vivoError = { code: aviso.code, msg: mensajeVivo(aviso), detalle: aviso.detalle || '' };
+      renderChip(); if (!st.report || st.demo) renderLoader();
+      throw Object.assign(aviso, { guardada: true });
+    }
     await app.cargarPlanilla(false, true);
   };
-  app.desconectar = () => { st.conexion = null; U.store.del(KX); app.cargarPlanilla(); };
+  app.desconectar = () => { st.conexion = null; st.vivoError = null; U.store.del(KX); app.cargarPlanilla(); };
+  // Cuando la lectura falla sin decir por qué (la versión 1 del código hacía eso), el modo prueba lo aclara
+  const diagnosticar = async (cx, e) => {
+    if (!['network', 'http', 'respuesta'].includes(e && e.code)) return e;
+    try {
+      const d = await S.probarVivo(cx);
+      return Number(d.version) >= 2 ? e : Object.assign(new Error('código anterior'), { code: 'viejo' });
+    } catch (e2) { return GUARDABLES.includes(e2.code) || e2.code === 'clave' ? e2 : e; }
+  };
 
   app.cargarPlanilla = async (forzarDrive, fresco) => {
     st.modelStatus = 'loading'; st.modelMsg = 'Conectando con la planilla…'; renderChip(); renderLoader();
@@ -4832,8 +4904,12 @@ p { margin: 0; }
     // 2) En la web: la conexión en vivo del equipo
     if (!IN_CLAUDE && st.conexion) {
       if (previo && !st.model) setModel(previo, 'loading', 'Actualizando ANALISIS en vivo…');
-      try { const m = await S.loadVivo(st.conexion, progreso, fresco); S.save(m); setModel(m, 'ok'); regenerar(); return; }
-      catch (e) { conCopia(mensajeVivo(e)); return; }
+      try { const m = await S.loadVivo(st.conexion, progreso, fresco); st.vivoError = null; S.save(m); setModel(m, 'ok'); regenerar(); return; }
+      catch (e0) {
+        const e = await diagnosticar(st.conexion, e0);
+        st.vivoError = { code: e.code || 'error', msg: mensajeVivo(e), detalle: e.detalle || '' };
+        conCopia(st.vivoError.msg); return;
+      }
     }
     // 3) Sin fuente: la última copia guardada, o explicar cómo conectarla
     if (previo) { setModel(previo, 'ok', ''); regenerar(); return; }
@@ -4845,6 +4921,12 @@ p { margin: 0; }
     const c = e && e.code;
     if (c === 'clave') return 'La conexión en vivo rechazó la clave: pedí el link nuevo de la conexión.';
     if (c === 'timeout') return 'La conexión en vivo tardó demasiado. Tocá «Volver a leer» en un rato.';
+    if (c === 'viejo') return 'La conexión en vivo todavía tiene el código anterior, que Google no deja leer con permiso de solo lectura. Hay que actualizarla en script.google.com (2 minutos).';
+    if (c === 'permiso') return 'La cuenta de Google que creó la conexión no puede abrir ANALISIS DE PRODUCTOS. Hay que compartirle ANALISIS (como «Lector») o crear la conexión desde una cuenta que la abra.';
+    if (c === 'servicio') return 'A la conexión en vivo le falta el servicio «Google Sheets API»: hay que pegar el appsscript.json nuevo y crear una versión nueva.';
+    if (c === 'alcance') return 'A la conexión en vivo le falta el permiso de lectura: hay que pegar el appsscript.json nuevo y crear una versión nueva.';
+    if (c === 'cuota') return 'Google frenó las lecturas por un rato (demasiadas seguidas). Tocá «Volver a leer» en unos minutos.';
+    if (c === 'network') return 'No se pudo llegar a la conexión en vivo (¿hay internet?). Si sigue, revisá que esté implementada como «Aplicación web» con acceso «Cualquier usuario».';
     return 'No se pudo leer ANALISIS en vivo (' + ((e && e.message) || 'error') + ').';
   };
   app.mensajeVivo = mensajeVivo;
@@ -5118,7 +5200,15 @@ p { margin: 0; }
     const corto = st.modelStatus === 'idle' ? 'Planilla sin conectar' : st.modelStatus === 'error' ? 'Planilla: no se pudo leer' : null;
     txt.textContent = st.modelStatus === 'ok' && st.model ? `Planilla: ${RV.render.origenTxt(st.model)} · ${U.relTime(st.model.fetchedAt)}` : (corto || st.modelMsg || 'Planilla');
     chip.title = (st.modelStatus === 'ok' ? txt.textContent : (st.modelMsg || txt.textContent)) + ' · tocá para ver la carga de archivos';
+    // La conexión en vivo falló: el chip lo dice y lleva directo a cómo arreglarla
+    if (vivoFallo() && st.modelStatus !== 'loading') {
+      chip.className = 'status-chip ' + (st.modelStatus === 'ok' ? 'is-warn' : 'is-err');
+      txt.textContent = st.modelStatus === 'ok' ? 'Planilla: copia guardada · la conexión en vivo falló' : 'Planilla: la conexión en vivo falló';
+      chip.title = st.vivoError.msg + ' · tocá para ver cómo arreglarla';
+    }
   };
+  const vivoFallo = () => !!(st.vivoError && st.conexion && !IN_CLAUDE);
+  app.vivoFallo = vivoFallo;
   const renderLoader = () => {
     const el = $id('cargar'); if (!el) return;
     el.innerHTML = RV.render.loader(st);
@@ -5454,7 +5544,18 @@ p { margin: 0; }
     else if (act === 'generar') app.generar(false);
     else if (act === 'abrir-carga') { st.loaderOpen = true; renderLoader(); $id('cargar').scrollIntoView({ behavior: 'smooth' }); }
     else if (act === 'cerrar-carga') { st.loaderOpen = false; renderLoader(); }
-    else if (act === 'recargar-planilla') app.cargarPlanilla(false, true);
+    else if (act === 'recargar-planilla') {
+      // Desde el panel de la conexión: al terminar, el panel muestra cómo quedó
+      const enPanel = !!a.closest('[data-panel="conexion"]');
+      if (enPanel) { a.disabled = true; a.textContent = 'Leyendo…'; }
+      app.cargarPlanilla(false, true).then(() => {
+        const d = $id('drawer');
+        if (!enPanel || d.hidden || !d.querySelector('[data-panel="conexion"]')) return;
+        d.innerHTML = RV.render.conexion(st);
+        const x = d.querySelector('[data-action="cerrar-drawer"]'); if (x) x.focus();
+        toast(vivoFallo() ? 'Todavía no puede leer: mirá el aviso.' : 'Leída en vivo.');
+      });
+    }
     else if (act === 'conectar-drive') app.cargarPlanilla(true);
     else if (act === 'gastos') { st.opciones.gastosModo = a.dataset.modo; U.store.set(K.opciones, st.opciones); reconstruir(); }
     else if (act === 'metrica') { st.metrica = a.dataset.k; renderSeccion('evolucion', RV.render.evolucion(st.report, st)); montarGraficos(st.report); }
@@ -5493,11 +5594,18 @@ p { margin: 0; }
         msg.textContent = 'Probando la conexión…'; msg.className = 'vivo-msg small muted'; btn.disabled = true;
         try {
           await app.guardarConexion(fv.querySelector('input').value, st.conexion ? st.conexion.clave : st.claveEnCurso);
+          if (vivoFallo()) throw Object.assign(new Error(st.vivoError.msg), { code: st.vivoError.code, guardada: true }); // respondió pero no pudo leer todo
           st.verCodigo = false; st.claveEnCurso = null;
           toast('¡Conectado! La página ya lee ANALISIS en vivo.'); app.abrirConexion();
         } catch (e) {
+          if (e.guardada) st.claveEnCurso = null;
           msg.className = 'vivo-msg small err-txt';
-          msg.textContent = e.code === 'url' ? e.message : e.code === 'clave' ? 'Respondió, pero la clave no coincide: pegaste el código copiado de esta página? Si lo cambiaste, implementá una versión nueva.' : 'No respondió. Revisá que esté implementada como «Aplicación web» con acceso «Cualquier usuario» y probá de nuevo.';
+          msg.textContent = e.code === 'url' ? e.message
+            : e.code === 'clave' ? 'Respondió, pero la clave no coincide: ¿pegaste el código copiado de esta página? Si lo cambiaste, creá una versión nueva (Implementar → Gestionar implementaciones → Editar → Nueva versión).'
+            : e.code === 'viejo' ? 'Respondió, pero todavía con el código anterior. ¿Creaste la versión nueva? (Implementar → Gestionar implementaciones → lápiz «Editar» → Versión: «Nueva versión» → Implementar). Guardar el código solo no alcanza.'
+            : e.guardada ? 'Quedó guardada, pero todavía no puede leer: ' + mensajeVivo(e)
+            : e.code === 'timeout' ? 'Tardó demasiado en responder. Esperá un minuto y probá de nuevo.'
+            : 'No respondió. Revisá que esté implementada como «Aplicación web» con acceso «Cualquier usuario» y probá de nuevo.';
         } finally { btn.disabled = false; }
         return;
       }
@@ -5539,7 +5647,10 @@ p { margin: 0; }
     });
     $id('scrim').addEventListener('click', app.cerrarDrawer);
     $id('btn-excel').addEventListener('click', app.exportar);
-    $id('sheet-chip').addEventListener('click', () => { st.loaderOpen = true; renderLoader(); $id('cargar').scrollIntoView({ behavior: 'smooth' }); });
+    $id('sheet-chip').addEventListener('click', () => {
+      if (vivoFallo()) { st.verCodigo = false; app.abrirConexion(); return; }
+      st.loaderOpen = true; renderLoader(); $id('cargar').scrollIntoView({ behavior: 'smooth' });
+    });
     // Arrastrar y soltar (en toda la página)
     let dragDepth = 0;
     window.addEventListener('dragenter', ev => { if (ev.dataTransfer && [...ev.dataTransfer.types].includes('Files')) { dragDepth++; const dz = $id('dropzone'); if (dz) dz.classList.add('is-over'); } });
