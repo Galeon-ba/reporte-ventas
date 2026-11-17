@@ -994,6 +994,13 @@ select.field, .file select { background: var(--surface); color: var(--ink); }
 .calc-out .pill.ok { background: var(--good-soft); color: var(--good-ink); }
 .calc-out .pill.warn { background: var(--warn-soft); color: var(--warn-ink); }
 .calc-out .pill.crit { background: var(--crit-soft); color: var(--crit-ink); }
+/* 2.15.0: la calculadora «¿Qué margen querés?» (el % va pegado al número) */
+.calc-pct { display: inline-flex; align-items: center; gap: .375rem; font-weight: 700; }
+.calc .calc-pct input { width: 6.5rem; }
+/* 2.15.0: productos de la planilla sin ventas, al buscar */
+.sin-ventas { margin-top: 1rem; padding-top: .875rem; border-top: 1px solid var(--line); display: grid; gap: .5rem; }
+.sv-lista { display: flex; flex-wrap: wrap; gap: .5rem; }
+.sv-lista .btn { max-width: 100%; white-space: normal; text-align: left; }
 .sales-list { display: grid; gap: 0; font-size: .8125rem; }
 .sales-list > div { display: grid; grid-template-columns: 4.75rem minmax(0, 1fr) auto auto; gap: .625rem; padding: .4375rem 0; border-bottom: 1px solid var(--line); align-items: center; }
 
@@ -1681,6 +1688,40 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
     return U.clamp(dice + bonus, 0, 1);
   };
 
+  // ---------- El mismo producto escrito distinto (2.15.0) ----------
+  // En ANALISIS el mismo perfume puede estar en dos filas, una por vendedor, y escrito apenas distinto
+  // («Tommy Girl EDT 100 ml» de AGUS y «Tommy girl EDT 100ml» de SURAK). El «núcleo» es el nombre sin mayúsculas,
+  // acentos, signos ni palabras de relleno, con «100 ml» = «100ml» y «eau de toilette» = «edt», y las palabras en
+  // cualquier orden. El género va aparte: «Masc» y «Fem» NO son el mismo producto (Eternity de hombre y de mujer),
+  // pero «Masc» y sin género sí. Nunca junta tamaños distintos (100ml y 200ml son núcleos distintos).
+  const RELLENO = new Set(['perfume', 'perfumes', 'de', 'del', 'para', 'el', 'la', 'los', 'las', 'y', 'con', 'original', 'originales', 'importado', 'spray', 'vapo', 'x']);
+  const GENERO = { masc: 'm', masculino: 'm', masculina: 'm', hombre: 'm', caballero: 'm', fem: 'f', femenino: 'f', femenina: 'f', mujer: 'f', dama: 'f', unisex: 'u' };
+  const cacheNucleo = new Map();
+  U.nucleoProducto = (nombre) => {
+    const s0 = String(nombre == null ? '' : nombre);
+    if (cacheNucleo.has(s0)) return cacheNucleo.get(s0);
+    let t = U.normPlain(s0).replace(/&/g, ' ')
+      .replace(/\beau de toilette\b/g, ' edt ').replace(/\beau de parfum\b/g, ' edp ').replace(/\beau de cologne\b/g, ' edc ')
+      .replace(/(\d+(?:[.,]\d+)?)\s*(ml|mililitros|mls)\b/g, ' $1ml ').replace(/[^a-z0-9\s]/g, ' ');
+    let genero = null;
+    const toks = [];
+    for (const w of t.split(/\s+/)) {
+      if (!w || RELLENO.has(w)) continue;
+      if (GENERO[w]) { genero = genero && genero !== GENERO[w] ? 'x' : GENERO[w]; continue; }
+      toks.push(w);
+    }
+    const out = { nucleo: [...new Set(toks)].sort().join(' '), genero };
+    if (cacheNucleo.size > 5000) cacheNucleo.clear();
+    cacheNucleo.set(s0, out);
+    return out;
+  };
+  U.generoCompatible = (a, b) => !a || !b || a === b;
+  U.mismoProducto = (a, b) => {
+    if (U.norm(a) === U.norm(b)) return true;
+    const x = U.nucleoProducto(a), y = U.nucleoProducto(b);
+    return !!x.nucleo && x.nucleo === y.nucleo && U.generoCompatible(x.genero, y.genero);
+  };
+
   // Hash estable chico (para colores de producto / ids)
   U.hash = s => { let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
 
@@ -1739,6 +1780,13 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
     // El stock y el pedido miran solo los últimos 30 días (el ritmo de hoy, no el de hace un año).
     MULTIMES_DIAS: 31,
     STOCK_VENTANA_DIAS: 30,
+    // Venta para el stock y el pedido (2.15.0): todo lo cargado (el reporte y los meses guardados en «Mes a mes»),
+    // cada día con un peso que se reduce a la mitad cada PEDIDO_VIDA_MEDIA_DIAS días hacia atrás. Con menos de
+    // PEDIDO_DIAS_MIN días de datos, lo que falta se completa con la «Venta mensual promedio» de la planilla.
+    // Los días de las fechas fuertes no cuentan como días normales (las suma «Sumar las fechas fuertes»).
+    PEDIDO_VIDA_MEDIA_DIAS: 60,  // elegido con el backtest de los 90 días de Agus (20/08 a 15/11/2026): ver el documento técnico 2.15.0
+    PEDIDO_DIAS_MIN: 30,
+    PEDIDO_HISTORIA_MAX_DIAS: 400,
     MESES_MAX: 12,               // lo que dice la carga: «hasta 12» (más también funciona)
     // Stock parado por antigüedad (2.12.0, R8): días sin vender desde la última venta conocida
     STOCK_PARADO_TRAMOS: [30, 60, 90, 180],
@@ -1819,6 +1867,15 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
 (function (RV) {
   'use strict';
   RV.CAMBIOS = [
+    {
+      v: '2.15.0', fecha: '2026-11-17', tipo: 'menor', titulo: 'Pedido más estable, reclamos y la ventana de cada producto',
+      items: [
+        'El stock y el pedido ya no usan solo el reporte que subís: usan también los meses guardados en esta compu, con más peso lo más reciente y sin los días de fechas fuertes. Alcanza con subir una vez un reporte largo y después solo el del mes.',
+        'Una venta con la plata devuelta al comprador (por ejemplo, un reclamo perdido) o una fila de Meli sin unidades ya no entra en el margen: va con las devoluciones.',
+        'Un perfume que está en tu columna de la planilla y también en la de otro socio ya no aparece como de otro cuando lo vendés vos.',
+        'La ventana de cada producto se abre aunque no tenga ventas, y suma «¿Qué margen querés?», que te dice a qué precio venderlo. Desde el buscador también podés calcular uno que no está en ningún lado.',
+      ],
+    },
     {
       v: '2.14.0', fecha: '2026-11-11', tipo: 'menor', titulo: 'Clientes que vuelven y el mismo cliente',
       items: [
@@ -1978,7 +2035,7 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
 (function (RV) { RV.CODIGO_CONEXION = {"gs": "/**\n * Reporte de Ventas — conexión de SOLO LECTURA con «ANALISIS DE PRODUCTOS».\n *\n * Qué hace: cuando la página del reporte lo pide (con la clave de abajo), lee las pestañas que\n * necesita de la planilla y se las devuelve. Lee con el servicio «Google Sheets API», con permiso\n * solo para VER hojas de cálculo (ver appsscript.json): no puede escribir, borrar ni compartir nada.\n *\n * Cómo se instala: ver los pasos en la página (botón «Conectar en vivo»).\n * Versión 2 (3/11/2026): la versión 1 usaba SpreadsheetApp, que Google no deja usar con el permiso\n * de solo lectura; esta lee con la API de Sheets (que sí lo acepta) y, si algo falla, le dice a la\n * página el motivo en vez de mostrar la pantalla de error de Google.\n */\nconst PLANILLA_ID = '1Cnox1BsgOaPEg4lVh4BJTOd4yLCY60MMlMiPLOVSX2M'; // ANALISIS DE PRODUCTOS\nconst CLAVE = '__CLAVE__';                                         // la misma que tiene la página\nconst PESTANAS = ['TITULARES', 'MAPPING', 'EXCEPCIONES', 'Pedidos', 'GASTOS GRUPALES', 'Consulta stock',\n  'CPs a AGREGAR', 'CUOTAS', 'En STOCK'];\nconst MINUTOS_EN_MEMORIA = 5;                                      // si 5 personas abren a la vez, se lee una sola vez\nconst VERSION = 2;\n\nfunction doGet(e) {\n  const p = (e && e.parameter) || {};\n  if (!p.k || p.k !== CLAVE) return responder_({ ok: false, error: 'clave' }, p.callback);\n  try {\n    // Modo prueba: lee solo el nombre de la planilla (así ya se sabe si hay acceso)\n    if (p.prueba) return responder_({ ok: true, prueba: true, version: VERSION, planilla: libro_('properties(title)').properties.title }, p.callback);\n    const memoria = CacheService.getScriptCache();\n    let texto = p.fresco ? null : leerMemoria_(memoria);\n    if (!texto) {\n      texto = JSON.stringify(leerPlanilla_());\n      guardarMemoria_(memoria, texto);\n    }\n    if (p.callback) return ContentService.createTextOutput(nombreSeguro_(p.callback) + '(' + texto + ');').setMimeType(ContentService.MimeType.JAVASCRIPT);\n    return ContentService.createTextOutput(texto).setMimeType(ContentService.MimeType.JSON);\n  } catch (err) {\n    return responder_(explicarError_(err), p.callback);\n  }\n}\n\nfunction libro_(campos) {\n  if (typeof Sheets === 'undefined') throw new Error('SIN_SERVICIO_SHEETS');\n  return Sheets.Spreadsheets.get(PLANILLA_ID, { fields: campos });\n}\n\nfunction leerPlanilla_() {\n  const libro = libro_('properties(title),sheets(properties(title,sheetType))');\n  const quiero = PESTANAS.map(normal_);\n  const nombres = (libro.sheets || []).map(function (h) { return h.properties || {}; })\n    .filter(function (pr) { return (!pr.sheetType || pr.sheetType === 'GRID') && quiero.indexOf(normal_(pr.title)) !== -1; })\n    .map(function (pr) { return pr.title; });\n  const hojas = {};\n  if (nombres.length) {\n    const rangos = nombres.map(function (n) { return \"'\" + String(n).replace(/'/g, \"''\") + \"'\"; });\n    const leer = function (fechas) {\n      return Sheets.Spreadsheets.Values.batchGet(PLANILLA_ID, { ranges: rangos, majorDimension: 'ROWS', valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: fechas }).valueRanges || [];\n    };\n    // Dos lecturas: en la primera las fechas vienen como número de serie y en la segunda como texto.\n    // Así se sabe qué celdas son fechas (número en una, texto en la otra) y se manda la fecha exacta.\n    // Si alguien editó la planilla justo entre las dos lecturas, no coinciden: se vuelve a leer.\n    let numeros, textos;\n    for (let intento = 1; intento <= 3; intento++) {\n      numeros = leer('SERIAL_NUMBER'); textos = leer('FORMATTED_STRING');\n      if (coinciden_(numeros, textos)) break;\n      if (intento < 3) Utilities.sleep(1000);\n    }\n    nombres.forEach(function (nombre, i) {\n      const a = (numeros[i] && numeros[i].values) || [], b = (textos[i] && textos[i].values) || [];\n      let ancho = 0;\n      a.forEach(function (fila) { if (fila && fila.length > ancho) ancho = fila.length; });\n      const filas = a.map(function (fila, r) {\n        const out = [];\n        for (let c = 0; c < ancho; c++) {\n          const v = fila && c < fila.length ? fila[c] : '';\n          const t = b[r] && b[r][c];\n          out.push(typeof v === 'number' && typeof t === 'string' ? '@@fecha:' + fechaDeSerie_(v) : (v == null ? '' : v));\n        }\n        return out;\n      });\n      hojas[nombre] = recortar_(filas);\n    });\n  }\n  return { ok: true, version: VERSION, planilla: libro.properties.title, leida: new Date().toISOString(), hojas: hojas };\n}\n\n// Las dos lecturas tienen que ser iguales salvo en las fechas (número en una, texto en la otra)\nfunction coinciden_(A, B) {\n  if (A.length !== B.length) return false;\n  for (let i = 0; i < A.length; i++) {\n    const a = (A[i] && A[i].values) || [], b = (B[i] && B[i].values) || [];\n    if (a.length !== b.length) return false;\n    for (let r = 0; r < a.length; r++) {\n      const fa = a[r] || [], fb = b[r] || [];\n      if (fa.length !== fb.length) return false;\n      for (let c = 0; c < fa.length; c++) {\n        const x = fa[c], y = fb[c];\n        if (typeof x === 'number' ? !(y === x || typeof y === 'string') : x !== y) return false;\n      }\n    }\n  }\n  return true;\n}\n\n// Número de serie de Sheets (días desde el 30/12/1899, con la hora como fracción) → \"2026-10-28T14:30:00\"\nfunction fechaDeSerie_(s) {\n  const d = new Date(Math.round((s - 25569) * 86400) * 1000);\n  const dos = function (n) { return (n < 10 ? '0' : '') + n; };\n  return d.getUTCFullYear() + '-' + dos(d.getUTCMonth() + 1) + '-' + dos(d.getUTCDate()) + 'T' +\n    dos(d.getUTCHours()) + ':' + dos(d.getUTCMinutes()) + ':' + dos(d.getUTCSeconds());\n}\n\n// El motivo de la falla, en palabras que la página entiende\nfunction explicarError_(err) {\n  const m = String((err && err.message) || err || 'error');\n  const r = function (error) { return { ok: false, error: error, version: VERSION, detalle: m.slice(0, 400) }; };\n  if (m === 'SIN_SERVICIO_SHEETS' || /Sheets is not defined|has not been used in project|is disabled|SERVICE_DISABLED|accessNotConfigured/i.test(m)) return r('servicio');\n  if (/Specified permissions are not sufficient|insufficient authentication scopes|ACCESS_TOKEN_SCOPE_INSUFFICIENT/i.test(m)) return r('alcance');\n  if (/Quota exceeded|RESOURCE_EXHAUSTED|Rate Limit|too many|\\b429\\b/i.test(m)) return r('cuota');\n  if (/does not have permission|PERMISSION_DENIED|not have access|no tiene permiso|status 403|\\b403\\b/i.test(m)) return r('permiso');\n  if (/Requested entity was not found|NOT_FOUND|\\b404\\b/i.test(m)) return r('permiso');\n  return r('lectura');\n}\nconst CONSEJOS_ = {\n  servicio: 'Falta activar «Google Sheets API»: reemplazá appsscript.json por el de la página, guardá y volvé a probar.',\n  alcance: 'El permiso no alcanza: reemplazá appsscript.json por el de la página, guardá y volvé a probar.',\n  permiso: 'La cuenta de Google con la que estás (arriba a la derecha) no puede abrir ANALISIS DE PRODUCTOS. Compartí ANALISIS con esta cuenta como «Lector», o creá la conexión desde una cuenta que ya la abra.',\n  cuota: 'Google frenó las lecturas por un rato (demasiadas seguidas). Probá de nuevo en unos minutos.',\n  lectura: 'Copiá este mensaje y mandáselo a quien te ayude con la página.',\n};\n\nfunction normal_(s) { return String(s).toLowerCase().replace(/\\s+/g, ' ').trim(); }\nfunction vacio_(v) { return v === '' || v === null; }\nfunction recortar_(filas) { // saca filas y columnas vacías del final (la planilla tiene cientos de filas en blanco)\n  let n = filas.length;\n  while (n > 0 && filas[n - 1].every(vacio_)) n--;\n  filas = filas.slice(0, n);\n  let cols = 0;\n  filas.forEach(function (f) { for (let c = f.length; c > cols; c--) { if (!vacio_(f[c - 1])) { cols = c; break; } } });\n  return filas.map(function (f) { return f.slice(0, cols); });\n}\nfunction nombreSeguro_(s) { return String(s).replace(/[^\\w.$]/g, '').slice(0, 64) || 'cb'; }\nfunction responder_(objeto, callback) {\n  const texto = JSON.stringify(objeto);\n  if (callback) return ContentService.createTextOutput(nombreSeguro_(callback) + '(' + texto + ');').setMimeType(ContentService.MimeType.JAVASCRIPT);\n  return ContentService.createTextOutput(texto).setMimeType(ContentService.MimeType.JSON);\n}\nfunction leerMemoria_(memoria) {\n  const n = Number(memoria.get('partes') || 0);\n  if (!n) return null;\n  const claves = [];\n  for (let i = 0; i < n; i++) claves.push('p' + i);\n  const partes = memoria.getAll(claves);\n  let texto = '';\n  for (let i = 0; i < n; i++) { if (partes['p' + i] == null) return null; texto += partes['p' + i]; }\n  return texto;\n}\nfunction guardarMemoria_(memoria, texto) {\n  const TAM = 40000, o = {};\n  let n = 0;\n  for (let i = 0; i < texto.length; i += TAM) o['p' + (n++)] = texto.slice(i, i + TAM);\n  o.partes = String(n);\n  try { memoria.putAll(o, MINUTOS_EN_MEMORIA * 60); } catch (err) { /* si no entra en memoria, no pasa nada */ }\n}\n\n/**\n * Para probar desde el editor: arriba elegí «probar» y tocá «Ejecutar».\n * Abajo, en el «Registro de ejecución», dice si pudo leer ANALISIS y, si no, qué hacer.\n */\nfunction probar() {\n  try {\n    const r = leerPlanilla_();\n    Logger.log('OK: la conexión puede leer «' + r.planilla + '» (solo lectura). Pestañas leídas:');\n    Object.keys(r.hojas).forEach(function (k) { Logger.log('   ' + k + ': ' + r.hojas[k].length + ' filas'); });\n    const leidas = Object.keys(r.hojas).map(normal_);\n    const faltan = PESTANAS.filter(function (n) { return leidas.indexOf(normal_(n)) === -1; });\n    if (faltan.length) Logger.log('No encontré estas pestañas (si se cambiaron de nombre, la página no las va a ver): ' + faltan.join(', '));\n  } catch (err) {\n    const e = explicarError_(err);\n    Logger.log('NO PUDO LEER ANALISIS. Motivo que da Google: ' + e.detalle);\n    Logger.log('Qué hacer: ' + CONSEJOS_[e.error]);\n  }\n}\n", "manifest": "{\n  \"timeZone\": \"America/Argentina/Buenos_Aires\",\n  \"runtimeVersion\": \"V8\",\n  \"exceptionLogging\": \"STACKDRIVER\",\n  \"dependencies\": {\n    \"enabledAdvancedServices\": [\n      { \"userSymbol\": \"Sheets\", \"serviceId\": \"sheets\", \"version\": \"v4\" }\n    ]\n  },\n  \"oauthScopes\": [\"https://www.googleapis.com/auth/spreadsheets.readonly\"],\n  \"webapp\": { \"executeAs\": \"USER_DEPLOYING\", \"access\": \"ANYONE_ANONYMOUS\" }\n}\n"}; })(globalThis.RV = globalThis.RV || {});
 
 /* Generado por build.py desde src/guia.md: la guía de uso que se ve dentro de la página. */
-(function (RV) { RV.GUIA = {"html": "<h2 id=\"guia-que-es-y-para-que-sirve\">Qué es y para qué sirve<\/h2>\n<p>La página del Reporte de Ventas te dice, con tus propios archivos de Mercado Libre y Mercado Pago, <strong>cuánta plata te quedó de verdad en el mes<\/strong> y qué hacer con eso: qué productos te convienen, cuáles reponer, cuánta plata está trabada y cuánto le tenés que pasar a cada socio.<\/p>\n<p>Hace sola las cuentas que antes había que hacer a mano:<\/p>\n<ul>\n<li>A cada venta le resta lo que se queda Meli (comisión, envío, impuestos y cupones) y el flex.<\/li>\n<li>Le resta el costo de cada perfume, según la planilla ANALISIS DE PRODUCTOS.<\/li>\n<li>Separa lo que es tuyo de lo que es de otro socio.<\/li>\n<li>Le resta los gastos grupales que te tocan.<\/li>\n<\/ul>\n<p><strong>Ejemplo:<\/strong> si en octubre vendiste $11 millones, la página te muestra cuánto de eso se fue en Meli, envíos, mercadería y gastos, y te dice algo como «Ganancia neta: $2,5 millones».<\/p>\n<p><strong>Lo que no hace:<\/strong> no cambia nada en Mercado Libre, en Mercado Pago ni en la planilla. Solo lee. Tus archivos no se suben a ningún lado: se procesan en tu propio navegador.<\/p>\n<h2 id=\"guia-antes-de-empezar-que-necesitas\">Antes de empezar: qué necesitás<\/h2>\n<ol>\n<li><strong>El link de la página que te mandó Agus.<\/strong> Se puede usar desde la compu o el celular; en la compu se ve más cómodo. La primera vez abrí el link <strong>largo y completo<\/strong>: así tu navegador queda conectado a la planilla. Después podés guardar la página en favoritos. Si cambiás de compu, de celular o de navegador, abrí el link largo una vez más ahí.<\/li>\n<li><strong>El Excel de ventas de Mercado Libre de cada cuenta tuya<\/strong>, del período que querés ver (por ejemplo, el mes pasado). Es el mismo Excel que ya bajaban para la página anterior y se llama parecido a <code>…Ventas_AR_Mercado_Libre…xlsx<\/code>.<\/li>\n<li><strong>El reporte de Liquidaciones de Mercado Pago<\/strong> del mismo período, de cada cuenta. Es opcional pero conviene: sin él no ves qué plata ya se liberó y cuál falta. Se pide así: en Mercado Pago, menú de la izquierda → «Informes y facturación» → «Reportes de ventas y extractos de cuenta» → «Liquidaciones» → «Crear reporte». Elegís las fechas y tocás «Generar». Te llega un mail cuando está listo. Se llama parecido a <code>settlement_v2-…xlsx<\/code>.<\/li>\n<\/ol>\n<p><strong>Lo que no necesitás:<\/strong><\/p>\n<ul>\n<li>Bajar o subir ANALISIS DE PRODUCTOS: la página la lee sola.<\/li>\n<li>Abrir los Excel antes: soltalos tal cual vienen. Si los abrís y guardás con otro programa pueden cambiar y la página puede no reconocerlos.<\/li>\n<li>Una cuenta o contraseña para la página.<\/li>\n<\/ul>\n<h2 id=\"guia-paso-a-paso-armar-tu-reporte\">Paso a paso: armar tu reporte<\/h2>\n<p>La carga va en cuatro pasos numerados, de arriba hacia abajo (en la compu, el 1 y el 2 a la izquierda y el 3 y el 4 a la derecha):<\/p>\n<ol>\n<li><strong>«¿Quién sos?»: tocá tu nombre<\/strong> (Surak, Ana, Sergio, A Viajar o Agus). Abajo aparecen tus cuentas de Mercado Libre.<\/li>\n<li><strong>«Planilla de costos y stock»: fijate que esté leída.<\/strong> Tiene que decir «ANALISIS DE PRODUCTOS · en vivo», con un punto verde. Arriba a la derecha de la página dice lo mismo. Si dice «Planilla sin conectar», mirá «Problemas comunes» más abajo.<\/li>\n<li><strong>«Tus Excel del mes»: soltá los Excel<\/strong> en el recuadro «Soltá acá los Excel de Mercado Libre y Mercado Pago», o tocá «Elegir archivos». Podés soltar todos juntos: los de ventas y los de Mercado Pago de todas tus cuentas. La primera vez, si la página no conoce el número de vendedor que viene en el nombre de un archivo, te pone un selector al lado: elegí la cuenta. Se acuerda para la próxima.<\/li>\n<li><strong>«Cuentas del reporte»: elegí qué cuentas entran.<\/strong> Cada cuenta se puede marcar o desmarcar: el reporte se puede armar con una, con varias o con todas.<\/li>\n<\/ol>\n<p><strong>Varios meses juntos (desde la 2.8.0):<\/strong> en el paso 3 podés soltar hasta 12 Excel de ventas de una misma cuenta, uno por mes (y los de Mercado Pago de esos meses, si los tenés). El reporte muestra el período entero; en «Día a día», «Por mes» separa cada mes y «Mes a mes» guarda cada mes aparte, sin pisar lo que ya tenías guardado. Si una venta aparece en dos archivos (por ejemplo, el 31 de un mes en los dos), se cuenta una sola vez. Ejemplo: soltás los Excel de ARMINDA de noviembre de 2025 a octubre de 2026 y ves el año entero; en «Mes a mes» quedan 12 renglones, uno por mes.<\/p>\n<p>Al final, <strong>tocá «Ver mi reporte»<\/strong>. Abajo aparece todo el reporte.<\/p>\n<p><strong>Para cambiar algo después<\/strong> (sumar una cuenta, cambiar un archivo), arriba del reporte está el botón «Sumar cuentas o cambiar archivos».<\/p>\n<p><strong>Ojo con el ejemplo:<\/strong> antes de que cargues tus archivos, la página muestra un reporte de EJEMPLO con datos inventados, marcado con la etiqueta naranja «EJEMPLO». No son tus números.<\/p>\n<h2 id=\"guia-como-leer-el-resumen-de-arriba\">Cómo leer el resumen de arriba<\/h2>\n<ul>\n<li><strong>Ganancia neta<\/strong> (el número grande de la tarjeta azul): lo que te quedó en el bolsillo en el período, después de Meli, envíos, mercadería, gastos grupales y devoluciones. Es <em>tu<\/em> ganancia: lo que vendiste de otros socios no entra acá. Abajo, una frase te dice qué parte de lo que facturaste te quedó.<\/li>\n<li><strong>El medidor del margen<\/strong> (el semicírculo): de cada $100 que facturaste con tus productos, cuántos te quedaron de ganancia, antes de gastos y devoluciones. Afuera tiene las tres franjas del semáforo de toda la página: roja por debajo de 24%, amarilla entre 24% y 28% y verde desde 28%. La rayita que cruza el arco marca el objetivo (25%). Debajo te dice con palabras cuántos puntos estás arriba o abajo del objetivo, con su forma: ▼ rojo, ◆ amarillo, ▲ verde.<\/li>\n<li><strong>Los cuatro números de al lado:<\/strong> ganancia de tus productos, gastos grupales, devoluciones y lo que tenés que transferirle a otros socios.<\/li>\n<li><strong>Ritmo:<\/strong> cuánto facturás y ganás por día. Si el mes no terminó, te dice cómo cerraría a ese ritmo.<\/li>\n<li><strong>Contra el mes anterior:<\/strong> si en esa compu armaste el reporte del mes anterior (mismo perfil y mismas cuentas), cuánto subieron o bajaron la ganancia neta por día, la facturación por día y el margen.<\/li>\n<li><strong>Meta:<\/strong> con «Ponerte una meta de ganancia…» podés fijarte una ganancia para el mes y ver cuánto te falta.<\/li>\n<li><strong>Gastos grupales: Proporcional o Mes completo.<\/strong> Si tu reporte es de medio mes, «Proporcional» cuenta solo la parte de los gastos que corresponde a esos días; «Mes completo» los cuenta todos.<\/li>\n<li><strong>Lo más importante<\/strong> (a la derecha; en el celular, abajo): las cuatro cosas que más conviene mirar, explicadas en criollo. Cada una tiene una etiqueta con su forma: ▼ Alerta, ◆ Atención, ▲ Bien y ● Dato. «Ver los…» muestra el resto.<\/li>\n<li><strong>Las cifras de abajo:<\/strong> facturación, unidades, ticket promedio, lo que te deposita Meli, el costo de la mercadería y lo que falta liberar en Mercado Pago, cada una con su ícono. En las dos primeras, las barritas son los días del período (la más marcada es el último).<\/li>\n<\/ul>\n<p><strong>Ojo:<\/strong> «facturación» es lo que pagaron los compradores, no lo que te queda. Lo que te queda es la ganancia neta.<\/p>\n<h2 id=\"guia-seccion-por-seccion\">Sección por sección<\/h2>\n<p>Cada parte del reporte aparece de a poco cuando llegás a ella: primero las tarjetas y enseguida su contenido (las barras crecen, las líneas se dibujan, el mapa de calor se prende y las cifras suben). Es solo para que se lea más fácil; si en tu compu o celular está activado «reducir movimiento», aparece todo de una. Al imprimir sale todo, aunque no hayas bajado hasta el final.<\/p>\n<p>Debajo del resumen hay una barra con todas las secciones (Resumen, La plata, Día a día, Productos, Stock, Envíos, Cobros, Terceros y gastos, Alertas y Cómo se calcula). Tocá cualquiera para ir directo.<\/p>\n<p>Algunas secciones arrancan con su número más importante en grande y una frase que lo explica: en La plata, cuántos pesos te quedan de cada $100; en Productos, cuánto te dejó el producto que más ganancia dio; en Stock, cuántos productos hay que reponer ya.<\/p>\n<h3>La plata: adónde se va<\/h3>\n<p>Es una «cascada»: arranca en lo que facturaste con tus productos y va restando renglón por renglón (comisión de Meli, envíos, cupones, impuestos, flex, mercadería, devoluciones y gastos) hasta llegar a la ganancia neta. Las barras grises restan, las verdes suman, la naranja es la ganancia neta y las azules son subtotales (la leyenda de abajo lo recuerda). Al lado, «De cada $100 que vendiste» muestra cien cuadraditos: cada uno es $1, los naranjas son tu ganancia y los celestes, lo que se va; abajo dice en qué se va cada parte.<\/p>\n<h3>Día a día<\/h3>\n<p>Cuánto vendiste cada día, el acumulado del mes con su proyección, qué días y horarios te compran más (cuanto más intenso el azul, más ventas) y el resumen por semana. «Mes a mes» compara con los reportes de meses anteriores que armaste <strong>en esa misma compu<\/strong>. Si el período cruza meses, «Por mes» muestra cada uno; un mes marcado «aprox.» tiene ventas de antes del primer pedido de PEDIDOS, que usan el costo de hoy (la facturación y las unidades son exactas).<\/p>\n<h3>Productos<\/h3>\n<p>Una fila por producto: unidades, precio promedio, cuánto ganás por unidad y el <strong>margen<\/strong> con semáforo y su forma (▼ rojo, menos de 24%; ◆ amarillo, 24% a 28%; ▲ verde, 28% o más). En la compu, al lado del margen hay una barrita: la raya que la cruza es el objetivo (25%). En el celular cada producto se ve como una ficha. También:<\/p>\n<ul>\n<li><strong>Demanda contra margen:<\/strong> cada círculo es un producto. Arriba a la derecha están los que venden mucho y dejan buen margen.<\/li>\n<li><strong>Dónde ajustar el precio:<\/strong> el precio aproximado para llegar al objetivo de margen.<\/li>\n<li><strong>Más sobre tus productos<\/strong> (desde la 2.10.0): un bloque al final que viene cerrado; se abre tocando su título. Tiene dos partes:<\/li>\n<li><strong>Lo que más te deja:<\/strong> tus productos que dejaron plata, del que más ganó al que menos, con la ganancia de cada uno y el acumulado. Arriba te dice con cuántos llegás al 80 % de lo que ganaste. Ejemplo: «Con 5 de tus 8 productos que dejaron plata llegás al 80 % de lo que ganaste». Tocá un producto para ver su detalle.<\/li>\n<li><strong>Calculadora para un producto nuevo:<\/strong> ponés el precio de venta, el costo y el envío, y te dice cuánto te dejaría por unidad, su margen y a qué precio llegarías al objetivo. Usa la comisión, los impuestos y los cupones de tus ventas del período; el envío viene con el correo más común, y con un toque cambiás al de flex. Ejemplo: a $80.000, con un costo de $45.000 y correo, te dice cuánto te queda y si llega al 25 %.<\/li>\n<\/ul>\n<h3>El detalle de un producto<\/h3>\n<p>Tocá un producto para abrir su ficha. Tiene la ganancia y el margen, la calculadora <strong>«¿Y si lo vendés a…?»<\/strong> (escribís un precio y te dice cuánto ganarías), el precio de cada venta a lo largo del mes (los puntos rojos son ventas con margen bajo), cómo le fue contra el mes anterior, su stock, cuánto entra en el pedido y la lista de ventas.<\/p>\n<p><strong>Clásica o Premium<\/strong> (desde la 2.10.0): si el producto tiene cuotas en la pestaña CUOTAS de la planilla, debajo de «Cuotas» te dice cuántas ventas más necesitás si lo vendés en cuotas al precio contado, para ganar lo mismo. Ejemplo: si de contado cada venta te deja $10.000 y en cuotas $8.000, necesitás vender un 25 % más (13 ventas por cada 10). Si en cuotas al precio contado perdés plata, te dice a qué precio publicarlo.<\/p>\n<p><strong>Publicidad<\/strong> (desde la 2.11.0): si el producto tuvo ventas por publicidad, abajo hay un bloque «Publicidad» que viene cerrado; se abre tocando su título. Compara las ventas que el Excel de Meli marca «Venta por publicidad» con las demás: ventas, unidades, facturación, precio promedio, ganancia, ganancia por unidad y margen. Ejemplo: si 11 de las 45 ventas de un perfume vinieron por publicidad, el título dice «11 de 45 ventas vinieron por publicidad (24 %)», y adentro ves si esas ventas te dejaron más o menos por unidad que las otras. La ganancia es antes de pagar los anuncios: el Excel de ventas no trae lo que pagaste por ellos.<\/p>\n<p><strong>A qué precio vendías más<\/strong> (desde la 2.12.0): si en esa compu tenés otros meses guardados en «Mes a mes» con ventas del producto, abajo hay un bloque cerrado con un renglón por mes: el precio promedio, cuántas unidades vendías por semana y la ganancia por unidad, del precio más bajo al más alto. El mes con más ventas por semana dice «más vendió» (un mes de menos de 7 días no cuenta). Ejemplo: si en agosto lo vendías a $80.000 y salían 10 por semana, y en octubre a $90.000 y salen 6, ves que a $80.000 vendías más, y en la ganancia por unidad cuánto te dejaba cada una. En un celular muy angosto (320 px) la ganancia por unidad no entra en esa tabla.<\/p>\n<p><strong>La comisión de Meli subió<\/strong> (desde la 2.12.0): si el producto pagó más comisión que el último mes guardado en el que se vendió a un precio parecido (hasta un 15 % de diferencia), el detalle lo avisa debajo de la comparación con el mes anterior, por ejemplo: «La comisión de Meli subió de 13,0 % a 14,4 % (sep. 2026 → oct. 2026)». Avisa desde medio punto de suba. Puede ser un cambio de Meli en la categoría o más ventas por Premium (que cobra más): fijate el tipo de publicación en Meli. También aparece en «Alertas».<\/p>\n<h3>Envíos<\/h3>\n<p>Cuántos envíos fueron por flex y cuántos por correo, cuánto costó cada uno, a qué provincias vendiste y el flex por zona. Si dos ventas viajaron juntas, el flex se cuenta una sola vez.<\/p>\n<p><strong>Mapa por provincia<\/strong> (desde la 2.13.0): debajo de «A dónde vendiste», un bloque que viene cerrado y se abre tocando su título. Cada cuadradito es una provincia, más o menos donde está (no es a escala), con la parte de tus ventas que fue ahí, escrita y en color: más claro, menos del 2 %; después de 2 a 5 %, de 5 a 15 % y el más fuerte, 15 % o más. Las que no tuvieron ventas quedan grises. Tocá o pasá por una para ver su nombre y sus ventas. Al lado, lo mismo por región (Buenos Aires y CABA, Centro, Cuyo, Noroeste, Noreste, y Patagonia y La Pampa). Ejemplo: con el Excel de octubre de 2026, Buenos Aires dice 41 %, Capital Federal 18 % y Córdoba 13 %; «Buenos Aires y CABA» suma 58 %. Las barras de «A dónde vendiste» siguen igual.<\/p>\n<h3>Cobros en Mercado Pago<\/h3>\n<p>Necesita el reporte de Liquidaciones. Muestra qué plata ya se liberó, cuál falta y en qué fecha se libera (calendario). En amarillo, la plata con la fecha de liberación <strong>vencida<\/strong>: conviene revisarla en Mercado Pago, porque puede ser un reclamo. También cómo te pagan los compradores, en cuántas cuotas y las retenciones de Ingresos Brutos por provincia, que le sirven al contador.<\/p>\n<p><strong>Otros movimientos de la cuenta:<\/strong> lo que no son ventas de Meli (retiros, transferencias, pagos), solo con totales. Desde la 2.9.0, lo que pagaste de la <strong>factura de Meli<\/strong> va primero, en su propio renglón, en vez de mezclarse con tus pagos con QR o tarjeta. No se resta de la ganancia: el Excel no dice qué incluye la factura, y puede repetir cargos que ya se descontaron en cada venta. Ejemplo: si pagaste $121.293 de la factura, ves «Factura de Meli: 1 movimiento, −$121.293», y «Pagos con QR, tarjeta y servicios» baja en ese monto.<\/p>\n<h3>Terceros, gastos y devoluciones<\/h3>\n<ul>\n<li><strong>Plata de otros vendedores:<\/strong> productos de otro socio que se vendieron en tus cuentas, y cuánto le tenés que transferir (ya descontado Meli y el flex).<\/li>\n<li><strong>Gastos grupales:<\/strong> lo que te toca de la pestaña GASTOS GRUPALES.<\/li>\n<li><strong>Devoluciones y cancelaciones:<\/strong> cada una y cuánto te afectó. Las devoluciones «en curso» todavía no se descuentan: quedan en suspenso.<\/li>\n<li><strong>Reclamos y devoluciones por tipo<\/strong> (desde la 2.9.0): un bloque que viene cerrado; se abre tocando su título. Cuenta las ventas canceladas, devueltas, con devolución en curso, devueltas pero cobradas, con reclamo abierto, con reclamo cerrado y con mediación, y una tabla por producto. Una venta puede estar en más de un tipo. Ejemplo: si un producto tuvo 2 cancelaciones y 1 reclamo cerrado de 40 ventas, su renglón dice «Canc. 2 · Recl. cerrados 1 · 3 de 40». Si hay reclamos abiertos, además aparece una alerta con el número de cada venta, y un aviso en «Lo más importante», al final, detrás de lo que ya estaba.<\/li>\n<\/ul>\n<h3>Más análisis (desde la 2.12.0)<\/h3>\n<p>Una sección nueva, entre «Terceros y gastos» y «Alertas», que aparece solo cuando hay algo para mostrar. Tiene bloques que vienen cerrados y se abren tocando su título.<\/p>\n<p><strong>Fechas fuertes:<\/strong><\/p>\n<ul>\n<li>Para cada fecha fuerte que entra entera en lo que cargaste (San Valentín, Hot Sale, Día del Padre, Día del Amigo, Día de la Madre, CyberMonday, Black Friday y Navidad), cuánto vendiste por día en la fecha contra un día normal de antes (hasta 28 días, sin otras fechas fuertes), cuántas veces más y cuándo es la próxima.<\/li>\n<li>En las fechas de regalo cuentan los días en que se compra: por ejemplo, para el Día de la Madre, los 10 días antes del domingo. Hot Sale, CyberMonday y Black Friday cuentan sus 3 días.<\/li>\n<li>Abajo, tus productos en la última vez de la fecha que viene.<\/li>\n<li>Hacen falta al menos 7 días normales antes de la fecha. Hot Sale y CyberMonday los fija la CACE: 2025 y 2026 están confirmados; los otros años dicen «aproximada».<\/li>\n<li>Si una fecha empieza en 30 días o menos y el stock de algún producto no llega, te avisa en «Alertas» y en «Lo más importante», al final, detrás de lo que ya estaba.<\/li>\n<\/ul>\n<p><strong>Ejemplo:<\/strong> con el Excel de octubre de 2026, el Día de la Madre (8 al 17 de octubre) vendiste 6,8 unidades por día contra 2,1 de un día normal: ×3,2. La próxima es del 7 al 16 de octubre de 2027.<\/p>\n<p><strong>Qué se compra junto<\/strong> (desde la 2.13.0): qué productos salen juntos en una misma compra. Cuenta las compras con 2 productos distintos o más: los de un mismo «Paquete de 2 productos» (o de 3, o más) del Excel de Meli, las ventas que viajaron en el mismo envío y, desde la 2.14.0, lo que <strong>un mismo cliente compró el mismo día en compras separadas<\/strong> (abajo de la tabla dice cuántas son de esas). Nunca se muestra quién compró. La tabla muestra los pares que más se repiten (hasta 10) y cuántas veces salieron juntos; al lado, los productos que más salen con otro. Ejemplo: si en el mes hubo 3 paquetes con un perfume y su estuche, el renglón dice «Perfume · Estuche · 3». Con pocas compras, tomalo como una pista. Si ninguna compra tuvo 2 productos distintos, el bloque no aparece (en octubre de 2026 no hubo ninguna).<\/p>\n<p><strong>Clientes que vuelven<\/strong> (desde la 2.14.0): cuántos clientes te compraron en 2 días distintos o más, cada cuántos días vuelven (la mediana: la mitad vuelve antes y la mitad después), cuántos volvieron en este período, cuántos volvieron por algo que ya habían comprado y qué productos compran cuando vuelven. Cuenta este reporte y los meses guardados en esa compu (cada vez que armás un reporte, la página guarda sus clientes, mes por mes, como «Mes a mes»). Ejemplo: si en septiembre y octubre tuviste 200 clientes y 12 compraron en los dos meses, el título dice «12 de 200 clientes compraron más de una vez», y la tabla, qué compraron esos 12 cuando volvieron. Si nadie compró más de una vez, el bloque no aparece: con un solo mes casi nunca hay casos.<\/p>\n<p><strong>Cómo se reconoce a un cliente sin guardar quién es:<\/strong> el Excel de Meli trae el DNI (o CUIT) de cada comprador. Apenas soltás el archivo, tu navegador lo convierte en un código con una clave secreta que se crea al azar en esa compu y queda solo ahí, y el DNI se borra en el momento; el nombre ni se lee. La página nunca muestra el código ni quién compró: solo cantidades y productos. El código tampoco va al Excel ni al resumen para WhatsApp. Por eso:<\/p>\n<ul>\n<li>Cada compu tiene su propia clave: ve los clientes que vuelven con lo que se cargó en ella.<\/li>\n<li>Si borrás los datos del sitio en el navegador, se pierde la clave y lo guardado de clientes empieza de cero.<\/li>\n<li>«Borrar historial» (en «Mes a mes») borra también los clientes guardados de ese perfil.<\/li>\n<\/ul>\n<h3>Alertas<\/h3>\n<p>Lo que conviene corregir en la planilla o mirar en Meli y Mercado Pago, de lo más grave a lo menos grave: publicaciones sin mapear, productos sin costo, plata trabada, productos para reponer y más. Cada alerta lleva la misma etiqueta que «Lo más importante» (▼ Alerta, ◆ Atención o ● Dato) y dice qué hacer. Las que sumaron las versiones 2.8.0 a 2.14.0 (reclamos abiertos, fechas fuertes, comisión, stock parado, factura de Meli y ganancia aproximada) van al final, detrás de las de siempre.<\/p>\n<h3>Cómo se calcula<\/h3>\n<p>Explica de dónde sale cada número, para que cualquiera pueda chequearlo contra los Excel.<\/p>\n<h2 id=\"guia-stock-y-pedido-optimo\">Stock y pedido óptimo<\/h2>\n<p><strong>La tabla de stock<\/strong> muestra, para cada producto tuyo, cuánto stock hay según «Consulta stock» de la planilla (incluido lo que viene en camino), cuánto se vendió y la <strong>cobertura<\/strong>: cuántos días te dura al ritmo de venta del reporte. El estado te dice qué hacer:<\/p>\n<ul>\n<li><strong>✕ Sin stock<\/strong> o <strong>▼ Pedir ya:<\/strong> le quedan menos de 10,5 días.<\/li>\n<li><strong>◆ Revisar:<\/strong> menos de 21 días.<\/li>\n<li><strong>✓ OK:<\/strong> alcanza.<\/li>\n<\/ul>\n<p>En la compu, la barra de la cobertura muestra los días que te alcanza: la raya roja marca 10,5 días y la otra, 21.<\/p>\n<p><strong>Con varios meses juntos<\/strong>, la venta diaria del stock y del pedido sale solo de los <strong>últimos 30 días<\/strong> del período, para que la reposición siga el ritmo de hoy. Ejemplo: con un reporte de enero a octubre, un producto que se vendía mucho en enero y nada en octubre aparece como quieto, no como «pedir ya».<\/p>\n<p><strong>Stock parado por antigüedad<\/strong> (desde la 2.12.0): arriba de «Armá el pedido», un bloque cerrado con los productos que tenés en stock y no se venden hace 30 días o más, por tramos (30 a 59 días, 60 a 89, 90 a 179 y 180 o más) y con la plata que hay ahí (stock × costo de la planilla). La última venta se busca en este reporte y en los meses guardados en «Mes a mes» en esa compu; si no aparece en nada de eso, dice «no está» y los días van con «+», porque son al menos esos. Si alguno pasa los 90 días, también te avisa en «Alertas». Ejemplo: 13 perfumes que se vendieron por última vez el 14/06, con un reporte que llega al 29/10, dicen 137 días y $922.283 parados. Si no hay ninguno, el bloque no aparece.<\/p>\n<h3>Armá el pedido<\/h3>\n<p>La página arma el pedido sola. Vos elegís cuatro cosas:<\/p>\n<ol>\n<li><strong>El tipo de pedido.<\/strong> Cada botón ya muestra cuánto costaría.<ul>\n<li><strong>Óptimo<\/strong> (el recomendado): cubre los días que elijas de los productos que dejan buen margen y solo 21 días de los que están en rojo, para no inmovilizar plata en lo que menos deja.<\/li>\n<li><strong>Mínimo:<\/strong> lo justo para que ningún producto quede con menos de 21 días.<\/li>\n<li><strong>Completo:<\/strong> todos los productos hasta los días que elijas.<\/li>\n<li><strong>Con tope:<\/strong> ponés cuánto podés gastar como máximo, en dólares o en pesos, y la página arma el mejor pedido con esa plata. Primero cubre lo urgente, después el mínimo de todos y después el resto; en cada paso, primero lo que más ganancia deja por cada dólar.<\/li>\n<\/ul>\n<\/li>\n<li><strong>La venta mensual a usar.<\/strong> La página mezcla la venta mensual que figura en la planilla con la que dio este reporte. Con el deslizador elegís cuánto pesa cada una; al medio es mitad y mitad. Si la planilla dice 0 o está vacía, usa solo el reporte.<\/li>\n<li><strong>Los días a cubrir:<\/strong> para cuántos días querés comprar (30, si no cambiás nada).<\/li>\n<li><strong>El máximo a gastar<\/strong>, solo en «Con tope».<\/li>\n<\/ol>\n<p><strong>Sumar las fechas fuertes<\/strong> (desde la 2.12.0): una opción que viene apagada. Si la marcás, el pedido suma lo que vendiste de más la última vez en cada fecha fuerte que empieza dentro de los días a cubrir. Ejemplo: para 60 días, con el Black Friday en 29 días y la Navidad en 43, arriba del pedido dice «Suma Black Friday (en 29 días) y Navidad (en 43 días): +2 unidades por lo que vendiste de más la última vez», cada producto dice cuántas suma y el texto para WhatsApp también lo dice. Si en lo que cargaste no hay ninguna fecha fuerte, la opción no se puede marcar.<\/p>\n<p>Debajo aparece cuántas unidades pedir de cada producto, cuánto cuesta (precio en Paraguay + 10% de Sergio PY), para cuántos días te alcanza después y, al lado, lo que dice la planilla en «Cantidad a Comprar», para comparar. Con <strong>«Copiar para WhatsApp»<\/strong> te queda el pedido listo para mandar.<\/p>\n<p><strong>Ejemplo:<\/strong> si el pedido completo cuesta US$2.200 y ponés un tope de US$1.000, la página compra primero lo que se está por quedar sin stock, después lleva todo a 21 días y, si sobra plata, sigue con lo que más ganancia deja. Abajo te dice qué no entró y cuánto faltaría para el óptimo y para el completo.<\/p>\n<p><strong>Ojo:<\/strong><\/p>\n<ul>\n<li>El pedido usa las ventas de las cuentas que pusiste en el reporte. Si vendés esos productos en otras cuentas que no cargaste, la página lo avisa y el pedido puede quedar corto.<\/li>\n<li>Los días que cubre cada producto en el pedido pueden diferir un poco de la tabla de stock: el pedido usa la venta mezclada y la tabla usa solo la del reporte.<\/li>\n<li>La página recuerda cómo dejaste el pedido, en esa compu.<\/li>\n<\/ul>\n<h2 id=\"guia-el-recorrido-guiado-los-cartelitos\">El recorrido guiado (los cartelitos)<\/h2>\n<p>La primera vez que abrís la página aparecen unos <strong>cartelitos<\/strong> sobre la página de verdad: cada uno resalta una parte y explica para qué sirve, en una o dos líneas. Son dos recorridos:<\/p>\n<ul>\n<li><strong>«Antes de cargar»<\/strong> (9 pasos): que todo se procesa en tu compu, el perfil, la planilla, dónde soltar los Excel, que podés soltar varios meses, «Ver mi reporte», esta guía, las novedades y el reporte de ejemplo.<\/li>\n<li><strong>«Tu reporte»<\/strong> (23 pasos): aparece cuando armás tu primer reporte. Muestra la ganancia y el margen, los gastos, lo más importante, las secciones, Clásica o Premium, la publicidad, a qué precio vendías más, «Más sobre tus productos», el stock parado, el pedido, el mapa por provincia, la factura de Meli, los reclamos, las fechas fuertes, qué se compra junto, el mismo cliente el mismo día, los clientes que vuelven y los botones de arriba.<\/li>\n<\/ul>\n<p><strong>Cómo se usan:<\/strong><\/p>\n<ul>\n<li>«Siguiente» y «Anterior» pasan de cartelito; arriba dice en qué paso vas, por ejemplo «Paso 2 de 9». En el último, «Listo» lo cierra.<\/li>\n<li><strong>«Omitir»<\/strong> (o la X) cierra el recorrido y <strong>no vuelve a aparecer solo<\/strong>.<\/li>\n<li><strong>«No mostrar más recorridos»<\/strong> apaga también los que vengan con versiones nuevas.<\/li>\n<li><strong>Para verlo de nuevo cuando quieras:<\/strong> tocá el «?» de arriba y, en esta guía, <strong>«Ver el recorrido»<\/strong>. Si ya tenés tu reporte armado, muestra el de tu reporte; «El de la carga» muestra el otro. Si los habías apagado, ahí mismo está «Volver a mostrarlos».<\/li>\n<li><strong>Con el teclado:<\/strong> las flechas → y ← pasan de paso, Enter pasa al siguiente y Esc lo cierra.<\/li>\n<li><strong>En el celular<\/strong> el cartelito va abajo de todo y la página se mueve sola para que se vea lo que señala.<\/li>\n<\/ul>\n<p><strong>Cuando sale una versión nueva<\/strong> que trae algo para ver, la página te muestra <strong>solo eso<\/strong>, con el título «Novedades de la 2.7.0» (o el número que sea). Si la versión nueva no trae nada para mostrar, no aparece ningún cartelito.<\/p>\n<p><strong>Ejemplo:<\/strong> Sergio usaba la 2.13.0. Al abrir la 2.14.0 no ve los 9 pasos de nuevo, y al entrar no ve ningún cartelito (lo nuevo está en el reporte). Cuando arma su reporte ve solo dos: «Nuevo: el mismo cliente» y «Nuevo: clientes que vuelven».<\/p>\n<p>Si tu navegador no deja guardar nada (por ejemplo, si en su configuración bloqueaste los datos de los sitios), la página no puede acordarse de que ya lo viste: en vez de empezar sola, abajo te pregunta «¿Te muestro cómo se usa?».<\/p>\n<p>Los cartelitos nunca salen al imprimir ni en el PDF.<\/p>\n<h2 id=\"guia-botones-utiles\">Botones útiles<\/h2>\n<ul>\n<li><strong>Guía<\/strong> (arriba a la derecha, el signo de pregunta, y al pie): esta guía. Siempre está al día con la versión de la página. Arriba de todo tiene <strong>«Ver el recorrido»<\/strong> (los cartelitos de nuevo) e <strong>«Imprimir o guardar como PDF»<\/strong>, que imprime solo la guía, sin el reporte.<\/li>\n<li><strong>Excel<\/strong> (arriba a la derecha): baja todo el reporte en un Excel con varias hojas: resumen, productos, ventas, terceros, cobros, stock, pedido y alertas.<\/li>\n<li><strong>Resumen para WhatsApp<\/strong> (arriba del reporte): arma un texto con lo más importante del mes (ganancia, facturación, mejores productos, lo que hay que transferir, Mercado Pago, qué reponer y el pedido). Lo copiás y lo pegás.<\/li>\n<li><strong>Imprimir<\/strong> (ícono de impresora, en la versión web): para imprimir el reporte o guardarlo como PDF.<\/li>\n<li><strong>Tamaño: A− y A+<\/strong> (arriba a la derecha): achican o agrandan toda la página (letras, espacios y gráficos) de a un paso, del 85 % al 125 %. En la compu, el botón del medio muestra el tamaño y vuelve al 100 % al tocarlo; en el celular, un aviso te dice en cuánto quedó. La página se acuerda del tamaño en ese navegador. El zoom del navegador (Ctrl + y Ctrl − en la compu, pellizcar en el celular) también anda.<\/li>\n<li><strong>Modo oscuro<\/strong> (ícono de luna, en la versión web): fondo azul noche y letras claras. Tocándolo otra vez volvés al claro.<\/li>\n<li><strong>Ponerte una meta de ganancia…<\/strong> (en el resumen): fijás una ganancia para el mes.<\/li>\n<li><strong>Sumar cuentas o cambiar archivos<\/strong> (arriba del reporte): volvés a la carga sin perder lo que hiciste.<\/li>\n<li><strong>Volver a leer<\/strong> (en «Planilla de costos y stock»): si recién cambiaste algo en ANALISIS, lo trae al momento. Si no lo tocás, la página igual lee la planilla cada vez que se abre.<\/li>\n<\/ul>\n<h2 id=\"guia-version-y-novedades\">Versión y novedades<\/h2>\n<p>Arriba, al lado del nombre de la página, está el número de versión, por ejemplo <strong>v2.7.0<\/strong>. Tocándolo se abren las <strong>Novedades<\/strong>: qué cambió en cada versión, la más nueva primero. El número también está al pie de la página, y en el celular aparece solo ahí.<\/p>\n<ul>\n<li><strong>Un punto en el número<\/strong> quiere decir que la página se actualizó desde tu última visita. Se va cuando abrís las Novedades.<\/li>\n<li><strong>Cómo leer el número:<\/strong> el primero cambia cuando cambia la forma de usar la página, el segundo cuando se suma algo nuevo y el tercero cuando se arregla algo. De 2.6.0 a 2.7.0 hay algo nuevo (el recorrido guiado); de 2.5.0 a 2.5.1, solo arreglos.<\/li>\n<li><strong>Esta guía se actualiza con cada versión<\/strong>: si algo se ve distinto a lo que dice, recargá la página.<\/li>\n<li><strong>Para comparar números con alguien<\/strong>, fijense que los dos tengan la misma versión. Si no, recarguen la página (Ctrl + Shift + R en la compu; en el celular, cerrar la pestaña y volver a abrirla).<\/li>\n<li><strong>El Excel<\/strong> dice con qué versión se hizo, en la segunda línea de la hoja Resumen.<\/li>\n<\/ul>\n<h2 id=\"guia-problemas-comunes-y-como-resolverlos\">Problemas comunes y cómo resolverlos<\/h2>\n<div class=\"guia-tbl-wrap\" tabindex=\"0\" role=\"region\" aria-label=\"Tabla de la guía: Problemas comunes y cómo resolverlos\"><table class=\"guia-tbl\">\n<thead>\n<tr>\n<th>Lo que ves<\/th>\n<th>Qué pasa y qué hacer<\/th>\n<\/tr>\n<\/thead>\n<tbody>\n<tr>\n<td>Arriba dice «Planilla sin conectar»<\/td>\n<td>Ese navegador todavía no está conectado a ANALISIS. Abrí una vez el link largo que te mandó Agus, en esa misma compu o celular.<\/td>\n<\/tr>\n<tr>\n<td>«Planilla: no se pudo leer», «la conexión en vivo falló» o «copia guardada»<\/td>\n<td>La conexión con la planilla no pudo leer (internet, Google tardó, o hay que arreglarla). La página usa la última copia que guardó y te dice de cuándo es. Tocá ese aviso de arriba: dice el motivo. Si dice que hay que actualizar la conexión o compartir ANALISIS, avisale a quien la conectó: se arregla desde su cuenta de Google. Si no, probá «Volver a leer» en un rato.<\/td>\n<\/tr>\n<tr>\n<td>«no parece un reporte de Meli, de Mercado Pago ni la planilla»<\/td>\n<td>Ese archivo no es el Excel de ventas ni el de Liquidaciones, o se modificó al abrirlo. Bajalo de nuevo y soltalo sin abrirlo.<\/td>\n<\/tr>\n<tr>\n<td>«Elegí de qué cuenta es cada archivo»<\/td>\n<td>La página no conoce el número de vendedor de ese archivo. Elegí la cuenta en el selector que aparece al lado.<\/td>\n<\/tr>\n<tr>\n<td>«Falta el Excel de ventas de Meli»<\/td>\n<td>Soltaste solo el de Mercado Pago. El de ventas es obligatorio.<\/td>\n<\/tr>\n<tr>\n<td>«Cobros sin ventas»<\/td>\n<td>Cargaste el reporte de Mercado Pago de una cuenta pero no sus ventas: ese reporte no se usó.<\/td>\n<\/tr>\n<tr>\n<td>«X ventas aparecen en dos cuentas»<\/td>\n<td>El mismo Excel quedó asignado a dos cuentas. Revisá de qué cuenta es cada archivo. Igual se cuentan una sola vez.<\/td>\n<\/tr>\n<tr>\n<td>«X publicaciones sin mapear»<\/td>\n<td>Esas ventas no están en la pestaña MAPPING de la planilla. Hasta que se agreguen, no entran en la ganancia.<\/td>\n<\/tr>\n<tr>\n<td>«X productos sin costo»<\/td>\n<td>Falta el costo en TITULARES o un pedido en PEDIDOS. Sin costo no se puede calcular la ganancia de ese producto.<\/td>\n<\/tr>\n<tr>\n<td>«X productos sin vendedor en TITULARES»<\/td>\n<td>Se tomaron como tuyos. Si son de otro socio, hay que cargar el vendedor en la planilla.<\/td>\n<\/tr>\n<tr>\n<td>«Códigos postales de flex sin tarifa»<\/td>\n<td>Un código postal que no está en el tarifario: se usó un precio promedio. Hay que cargarlo en «CPs a AGREGAR» de la planilla.<\/td>\n<\/tr>\n<tr>\n<td>«Ventas que no aparecen en el reporte de Mercado Pago»<\/td>\n<td>El reporte de Mercado Pago es de otras fechas o se pidió antes que el de Meli. Pedilo de nuevo con las mismas fechas.<\/td>\n<\/tr>\n<tr>\n<td>«Con la fecha de liberación vencida»<\/td>\n<td>Mercado Pago no liberó esa plata aunque ya pasó la fecha: puede ser un reclamo o una retención. Revisalo en Mercado Pago.<\/td>\n<\/tr>\n<tr>\n<td>«Ventas con precio $0 en el Excel de Meli»<\/td>\n<td>Es una falla del Excel de Meli. La página las completó con el promedio de ese producto.<\/td>\n<\/tr>\n<tr>\n<td>Los números no te coinciden con otro lado<\/td>\n<td>Revisá que los archivos sean del mismo período y que estén marcadas todas las cuentas. Al final de la página, «Cómo se calcula» explica cada número.<\/td>\n<\/tr>\n<tr>\n<td>El período termina antes de fin de mes<\/td>\n<td>La página cuenta desde la primera hasta la última venta del archivo. Si los últimos días no hubo ventas, termina antes. Para los gastos podés elegir «Mes completo».<\/td>\n<\/tr>\n<tr>\n<td>En el celular una tabla no entra<\/td>\n<td>Deslizala con el dedo hacia el costado: la sombra en el borde te avisa que hay más.<\/td>\n<\/tr>\n<tr>\n<td>Ves números que no son tuyos<\/td>\n<td>Fijate si dice EJEMPLO: son datos inventados hasta que cargues tus archivos.<\/td>\n<\/tr>\n<tr>\n<td>Un socio no ve lo mismo que vos<\/td>\n<td>La meta, el historial «mes a mes», los clientes guardados y cómo dejaste el pedido se guardan en cada compu. La planilla y los cálculos son los mismos para todos.<\/td>\n<\/tr>\n<tr>\n<td>Un punto en el número de arriba, o el aviso «La página se actualizó»<\/td>\n<td>Es normal: hay una versión nueva. Tocá el número para ver qué cambió; el punto se va solo.<\/td>\n<\/tr>\n<tr>\n<td>Aparecieron unos cartelitos sobre la página<\/td>\n<td>Es el recorrido guiado: te muestra cómo se usa. Seguilo con «Siguiente» o cerralo con «Omitir»; no vuelve solo. Lo volvés a ver desde «?» → «Ver el recorrido».<\/td>\n<\/tr>\n<tr>\n<td>No aparece «A qué precio vendías más» ni el aviso de la comisión<\/td>\n<td>Hace falta otro mes guardado en «Mes a mes» en esa compu con ventas del producto. Armá una vez el reporte del mes anterior (o soltá varios meses juntos) y después el de este mes.<\/td>\n<\/tr>\n<tr>\n<td>No aparece «Más análisis»<\/td>\n<td>Todavía no hay ninguna fecha fuerte entera en lo que cargaste, con 7 días normales antes, ni compras con 2 productos distintos. Con los Excel de esas fechas aparece sola.<\/td>\n<\/tr>\n<tr>\n<td>No aparece el mapa por provincia<\/td>\n<td>El Excel de Meli no trae la provincia de ninguna venta (columna «Provincia»), o no se reconoce. Las ventas sin provincia se cuentan en la nota del mapa.<\/td>\n<\/tr>\n<tr>\n<td>No aparece «Qué se compra junto»<\/td>\n<td>Ninguna compra tuvo 2 productos distintos, ni en un paquete, ni en el mismo envío, ni del mismo cliente el mismo día. Es normal: en octubre de 2026 no hubo ninguna.<\/td>\n<\/tr>\n<tr>\n<td>No aparece «Clientes que vuelven»<\/td>\n<td>Ningún cliente compró en 2 días distintos en lo cargado en esa compu. Con un solo mes casi no hay casos: armá los reportes de varios meses (o soltá varios meses juntos). Si el Excel no trae el DNI del comprador, tampoco aparece.<\/td>\n<\/tr>\n<tr>\n<td>En otra compu los clientes que vuelven dan distinto<\/td>\n<td>Es normal: cada compu tiene su propia clave y cuenta lo que se cargó en ella.<\/td>\n<\/tr>\n<tr>\n<td>Los cartelitos no aparecen<\/td>\n<td>Ya los viste, los cerraste con «Omitir» o tocaste «No mostrar más recorridos». Abrí la guía («?») y tocá «Ver el recorrido».<\/td>\n<\/tr>\n<\/tbody>\n<\/table><\/div>\n<h2 id=\"guia-glosario\">Glosario<\/h2>\n<div class=\"guia-tbl-wrap\" tabindex=\"0\" role=\"region\" aria-label=\"Tabla de la guía: Glosario\"><table class=\"guia-tbl\">\n<thead>\n<tr>\n<th>Palabra<\/th>\n<th>Qué quiere decir<\/th>\n<\/tr>\n<\/thead>\n<tbody>\n<tr>\n<td>Facturación<\/td>\n<td>Lo que pagaron los compradores por tus productos. No es lo que te queda.<\/td>\n<\/tr>\n<tr>\n<td>Te deposita Meli<\/td>\n<td>Lo que te queda después de lo que cobra Meli (comisión, envío por correo, impuestos y cupones), antes del flex y la mercadería.<\/td>\n<\/tr>\n<tr>\n<td>Ganancia de tus productos<\/td>\n<td>Lo que te deposita Meli, menos el flex y el costo de la mercadería.<\/td>\n<\/tr>\n<tr>\n<td>Ganancia neta<\/td>\n<td>La ganancia de tus productos, menos devoluciones y gastos grupales: lo que te quedó en el bolsillo.<\/td>\n<\/tr>\n<tr>\n<td>Margen<\/td>\n<td>De cada $100 que facturaste, cuántos te quedaron de ganancia. 25% = $25 de cada $100.<\/td>\n<\/tr>\n<tr>\n<td>Semáforo<\/td>\n<td>Rojo: margen menor a 24%. Amarillo: entre 24% y 28%. Verde: 28% o más.<\/td>\n<\/tr>\n<tr>\n<td>Flex<\/td>\n<td>Envíos de Mercado Envíos Flex: no los hace el correo de Meli, se pagan aparte según la zona del código postal.<\/td>\n<\/tr>\n<tr>\n<td>Bonificación flex<\/td>\n<td>Lo que Meli te devuelve por cada envío flex.<\/td>\n<\/tr>\n<tr>\n<td>Cupones<\/td>\n<td>Descuentos que Meli le hace al comprador y te descuenta a vos.<\/td>\n<\/tr>\n<tr>\n<td>IIBB<\/td>\n<td>Ingresos Brutos: impuesto que te retienen en cada venta, según la provincia.<\/td>\n<\/tr>\n<tr>\n<td>Liberado / por liberar<\/td>\n<td>Plata que Mercado Pago ya te dejó disponible, o que todavía retiene hasta una fecha.<\/td>\n<\/tr>\n<tr>\n<td>Vencido<\/td>\n<td>Plata que debía estar liberada y no lo está. Hay que revisarla en Mercado Pago.<\/td>\n<\/tr>\n<tr>\n<td>Terceros<\/td>\n<td>Productos de otro socio que se vendieron en tus cuentas. Esa plata es de él.<\/td>\n<\/tr>\n<tr>\n<td>Gastos grupales<\/td>\n<td>Gastos que se pagan entre todos (insumos, contador, monotributo…), según la pestaña GASTOS GRUPALES.<\/td>\n<\/tr>\n<tr>\n<td>Cobertura<\/td>\n<td>Cuántos días te dura el stock al ritmo de venta actual.<\/td>\n<\/tr>\n<tr>\n<td>Mapear<\/td>\n<td>Decirle a la planilla (pestaña MAPPING) a qué producto corresponde cada publicación de Meli.<\/td>\n<\/tr>\n<tr>\n<td>Período<\/td>\n<td>Desde la primera hasta la última venta de los archivos que cargaste.<\/td>\n<\/tr>\n<tr>\n<td>Fecha fuerte<\/td>\n<td>Una fecha del año en que se vende más (Hot Sale, Día de la Madre, Black Friday, Navidad y otras). «×3,2» quiere decir que por día vendiste 3,2 veces lo de un día normal.<\/td>\n<\/tr>\n<tr>\n<td>Stock parado<\/td>\n<td>Stock de un producto que no se vende hace 30 días o más, con la plata que hay ahí al costo de la planilla.<\/td>\n<\/tr>\n<tr>\n<td>Cliente que vuelve<\/td>\n<td>Un cliente que te compró en 2 días distintos o más, en lo cargado en esa compu.<\/td>\n<\/tr>\n<tr>\n<td>Código de cliente<\/td>\n<td>Lo que arma tu navegador con el DNI del Excel y una clave secreta que queda solo en esa compu, para reconocer al mismo cliente sin guardar quién es. Nunca se muestra.<\/td>\n<\/tr>\n<tr>\n<td>Paquete<\/td>\n<td>Una compra con varios productos que Meli manda junta. En el Excel aparece como «Paquete de 2 productos» (o de 3, o más) con cada producto debajo.<\/td>\n<\/tr>\n<tr>\n<td>Región<\/td>\n<td>Grupo de provincias del mapa: Buenos Aires y CABA; Centro (Córdoba, Santa Fe y Entre Ríos); Cuyo (Mendoza, San Juan y San Luis); Noroeste; Noreste; y Patagonia y La Pampa.<\/td>\n<\/tr>\n<tr>\n<td>Perfil y cuentas<\/td>\n<td>El perfil es la persona (Surak, Ana, Sergio, A Viajar o Agus); las cuentas son sus cuentas de Mercado Libre.<\/td>\n<\/tr>\n<\/tbody>\n<\/table><\/div>", "secciones": [["guia-que-es-y-para-que-sirve", "Qué es y para qué sirve"], ["guia-antes-de-empezar-que-necesitas", "Antes de empezar: qué necesitás"], ["guia-paso-a-paso-armar-tu-reporte", "Paso a paso: armar tu reporte"], ["guia-como-leer-el-resumen-de-arriba", "Cómo leer el resumen de arriba"], ["guia-seccion-por-seccion", "Sección por sección"], ["guia-stock-y-pedido-optimo", "Stock y pedido óptimo"], ["guia-el-recorrido-guiado-los-cartelitos", "El recorrido guiado (los cartelitos)"], ["guia-botones-utiles", "Botones útiles"], ["guia-version-y-novedades", "Versión y novedades"], ["guia-problemas-comunes-y-como-resolverlos", "Problemas comunes y cómo resolverlos"], ["guia-glosario", "Glosario"]]}; })(globalThis.RV = globalThis.RV || {});
+(function (RV) { RV.GUIA = {"html": "<h2 id=\"guia-que-es-y-para-que-sirve\">Qué es y para qué sirve<\/h2>\n<p>La página del Reporte de Ventas te dice, con tus propios archivos de Mercado Libre y Mercado Pago, <strong>cuánta plata te quedó de verdad en el mes<\/strong> y qué hacer con eso: qué productos te convienen, cuáles reponer, cuánta plata está trabada y cuánto le tenés que pasar a cada socio.<\/p>\n<p>Hace sola las cuentas que antes había que hacer a mano:<\/p>\n<ul>\n<li>A cada venta le resta lo que se queda Meli (comisión, envío, impuestos y cupones) y el flex.<\/li>\n<li>Le resta el costo de cada perfume, según la planilla ANALISIS DE PRODUCTOS.<\/li>\n<li>Separa lo que es tuyo de lo que es de otro socio.<\/li>\n<li>Le resta los gastos grupales que te tocan.<\/li>\n<\/ul>\n<p><strong>Ejemplo:<\/strong> si en octubre vendiste $11 millones, la página te muestra cuánto de eso se fue en Meli, envíos, mercadería y gastos, y te dice algo como «Ganancia neta: $2,5 millones».<\/p>\n<p><strong>Lo que no hace:<\/strong> no cambia nada en Mercado Libre, en Mercado Pago ni en la planilla. Solo lee. Tus archivos no se suben a ningún lado: se procesan en tu propio navegador.<\/p>\n<h2 id=\"guia-antes-de-empezar-que-necesitas\">Antes de empezar: qué necesitás<\/h2>\n<ol>\n<li><strong>El link de la página que te mandó Agus.<\/strong> Se puede usar desde la compu o el celular; en la compu se ve más cómodo. La primera vez abrí el link <strong>largo y completo<\/strong>: así tu navegador queda conectado a la planilla. Después podés guardar la página en favoritos. Si cambiás de compu, de celular o de navegador, abrí el link largo una vez más ahí.<\/li>\n<li><strong>El Excel de ventas de Mercado Libre de cada cuenta tuya<\/strong>, del período que querés ver (por ejemplo, el mes pasado). Es el mismo Excel que ya bajaban para la página anterior y se llama parecido a <code>…Ventas_AR_Mercado_Libre…xlsx<\/code>.<\/li>\n<li><strong>El reporte de Liquidaciones de Mercado Pago<\/strong> del mismo período, de cada cuenta. Es opcional pero conviene: sin él no ves qué plata ya se liberó y cuál falta. Se pide así: en Mercado Pago, menú de la izquierda → «Informes y facturación» → «Reportes de ventas y extractos de cuenta» → «Liquidaciones» → «Crear reporte». Elegís las fechas y tocás «Generar». Te llega un mail cuando está listo. Se llama parecido a <code>settlement_v2-…xlsx<\/code>.<\/li>\n<\/ol>\n<p><strong>Lo que no necesitás:<\/strong><\/p>\n<ul>\n<li>Bajar o subir ANALISIS DE PRODUCTOS: la página la lee sola.<\/li>\n<li>Abrir los Excel antes: soltalos tal cual vienen. Si los abrís y guardás con otro programa pueden cambiar y la página puede no reconocerlos.<\/li>\n<li>Una cuenta o contraseña para la página.<\/li>\n<\/ul>\n<h2 id=\"guia-paso-a-paso-armar-tu-reporte\">Paso a paso: armar tu reporte<\/h2>\n<p>La carga va en cuatro pasos numerados, de arriba hacia abajo (en la compu, el 1 y el 2 a la izquierda y el 3 y el 4 a la derecha):<\/p>\n<ol>\n<li><strong>«¿Quién sos?»: tocá tu nombre<\/strong> (Surak, Ana, Sergio, A Viajar o Agus). Abajo aparecen tus cuentas de Mercado Libre.<\/li>\n<li><strong>«Planilla de costos y stock»: fijate que esté leída.<\/strong> Tiene que decir «ANALISIS DE PRODUCTOS · en vivo», con un punto verde. Arriba a la derecha de la página dice lo mismo. Si dice «Planilla sin conectar», mirá «Problemas comunes» más abajo.<\/li>\n<li><strong>«Tus Excel del mes»: soltá los Excel<\/strong> en el recuadro «Soltá acá los Excel de Mercado Libre y Mercado Pago», o tocá «Elegir archivos». Podés soltar todos juntos: los de ventas y los de Mercado Pago de todas tus cuentas. La primera vez, si la página no conoce el número de vendedor que viene en el nombre de un archivo, te pone un selector al lado: elegí la cuenta. Se acuerda para la próxima.<\/li>\n<li><strong>«Cuentas del reporte»: elegí qué cuentas entran.<\/strong> Cada cuenta se puede marcar o desmarcar: el reporte se puede armar con una, con varias o con todas.<\/li>\n<\/ol>\n<p><strong>Varios meses juntos (desde la 2.8.0):<\/strong> en el paso 3 podés soltar hasta 12 Excel de ventas de una misma cuenta, uno por mes (y los de Mercado Pago de esos meses, si los tenés). El reporte muestra el período entero; en «Día a día», «Por mes» separa cada mes y «Mes a mes» guarda cada mes aparte, sin pisar lo que ya tenías guardado. Si una venta aparece en dos archivos (por ejemplo, el 31 de un mes en los dos), se cuenta una sola vez. Ejemplo: soltás los Excel de ARMINDA de noviembre de 2025 a octubre de 2026 y ves el año entero; en «Mes a mes» quedan 12 renglones, uno por mes.<\/p>\n<p>Al final, <strong>tocá «Ver mi reporte»<\/strong>. Abajo aparece todo el reporte.<\/p>\n<p><strong>Para cambiar algo después<\/strong> (sumar una cuenta, cambiar un archivo), arriba del reporte está el botón «Sumar cuentas o cambiar archivos».<\/p>\n<p><strong>Ojo con el ejemplo:<\/strong> antes de que cargues tus archivos, la página muestra un reporte de EJEMPLO con datos inventados, marcado con la etiqueta naranja «EJEMPLO». No son tus números.<\/p>\n<h2 id=\"guia-como-leer-el-resumen-de-arriba\">Cómo leer el resumen de arriba<\/h2>\n<ul>\n<li><strong>Ganancia neta<\/strong> (el número grande de la tarjeta azul): lo que te quedó en el bolsillo en el período, después de Meli, envíos, mercadería, gastos grupales y devoluciones. Es <em>tu<\/em> ganancia: lo que vendiste de otros socios no entra acá. Abajo, una frase te dice qué parte de lo que facturaste te quedó.<\/li>\n<li><strong>El medidor del margen<\/strong> (el semicírculo): de cada $100 que facturaste con tus productos, cuántos te quedaron de ganancia, antes de gastos y devoluciones. Afuera tiene las tres franjas del semáforo de toda la página: roja por debajo de 24%, amarilla entre 24% y 28% y verde desde 28%. La rayita que cruza el arco marca el objetivo (25%). Debajo te dice con palabras cuántos puntos estás arriba o abajo del objetivo, con su forma: ▼ rojo, ◆ amarillo, ▲ verde.<\/li>\n<li><strong>Los cuatro números de al lado:<\/strong> ganancia de tus productos, gastos grupales, devoluciones y lo que tenés que transferirle a otros socios.<\/li>\n<li><strong>Ritmo:<\/strong> cuánto facturás y ganás por día. Si el mes no terminó, te dice cómo cerraría a ese ritmo.<\/li>\n<li><strong>Contra el mes anterior:<\/strong> si en esa compu armaste el reporte del mes anterior (mismo perfil y mismas cuentas), cuánto subieron o bajaron la ganancia neta por día, la facturación por día y el margen.<\/li>\n<li><strong>Meta:<\/strong> con «Ponerte una meta de ganancia…» podés fijarte una ganancia para el mes y ver cuánto te falta.<\/li>\n<li><strong>Gastos grupales: Proporcional o Mes completo.<\/strong> Si tu reporte es de medio mes, «Proporcional» cuenta solo la parte de los gastos que corresponde a esos días; «Mes completo» los cuenta todos.<\/li>\n<li><strong>Lo más importante<\/strong> (a la derecha; en el celular, abajo): las cuatro cosas que más conviene mirar, explicadas en criollo. Cada una tiene una etiqueta con su forma: ▼ Alerta, ◆ Atención, ▲ Bien y ● Dato. «Ver los…» muestra el resto.<\/li>\n<li><strong>Las cifras de abajo:<\/strong> facturación, unidades, ticket promedio, lo que te deposita Meli, el costo de la mercadería y lo que falta liberar en Mercado Pago, cada una con su ícono. En las dos primeras, las barritas son los días del período (la más marcada es el último).<\/li>\n<\/ul>\n<p><strong>Ojo:<\/strong> «facturación» es lo que pagaron los compradores, no lo que te queda. Lo que te queda es la ganancia neta.<\/p>\n<h2 id=\"guia-seccion-por-seccion\">Sección por sección<\/h2>\n<p>Cada parte del reporte aparece de a poco cuando llegás a ella: primero las tarjetas y enseguida su contenido (las barras crecen, las líneas se dibujan, el mapa de calor se prende y las cifras suben). Es solo para que se lea más fácil; si en tu compu o celular está activado «reducir movimiento», aparece todo de una. Al imprimir sale todo, aunque no hayas bajado hasta el final.<\/p>\n<p>Debajo del resumen hay una barra con todas las secciones (Resumen, La plata, Día a día, Productos, Stock, Envíos, Cobros, Terceros y gastos, Alertas y Cómo se calcula). Tocá cualquiera para ir directo.<\/p>\n<p>Algunas secciones arrancan con su número más importante en grande y una frase que lo explica: en La plata, cuántos pesos te quedan de cada $100; en Productos, cuánto te dejó el producto que más ganancia dio; en Stock, cuántos productos hay que reponer ya.<\/p>\n<h3>La plata: adónde se va<\/h3>\n<p>Es una «cascada»: arranca en lo que facturaste con tus productos y va restando renglón por renglón (comisión de Meli, envíos, cupones, impuestos, flex, mercadería, devoluciones y gastos) hasta llegar a la ganancia neta. Las barras grises restan, las verdes suman, la naranja es la ganancia neta y las azules son subtotales (la leyenda de abajo lo recuerda). Al lado, «De cada $100 que vendiste» muestra cien cuadraditos: cada uno es $1, los naranjas son tu ganancia y los celestes, lo que se va; abajo dice en qué se va cada parte.<\/p>\n<h3>Día a día<\/h3>\n<p>Cuánto vendiste cada día, el acumulado del mes con su proyección, qué días y horarios te compran más (cuanto más intenso el azul, más ventas) y el resumen por semana. «Mes a mes» compara con los reportes de meses anteriores que armaste <strong>en esa misma compu<\/strong>. Si el período cruza meses, «Por mes» muestra cada uno; un mes marcado «aprox.» tiene ventas de antes del primer pedido de PEDIDOS, que usan el costo de hoy (la facturación y las unidades son exactas).<\/p>\n<h3>Productos<\/h3>\n<p>Una fila por producto: unidades, precio promedio, cuánto ganás por unidad y el <strong>margen<\/strong> con semáforo y su forma (▼ rojo, menos de 24%; ◆ amarillo, 24% a 28%; ▲ verde, 28% o más). En la compu, al lado del margen hay una barrita: la raya que la cruza es el objetivo (25%). En el celular cada producto se ve como una ficha. También:<\/p>\n<ul>\n<li><strong>Demanda contra margen:<\/strong> cada círculo es un producto. Arriba a la derecha están los que venden mucho y dejan buen margen.<\/li>\n<li><strong>Dónde ajustar el precio:<\/strong> el precio aproximado para llegar al objetivo de margen.<\/li>\n<li><strong>Más sobre tus productos<\/strong> (desde la 2.10.0): un bloque al final que viene cerrado; se abre tocando su título. Tiene dos partes:<\/li>\n<li><strong>Lo que más te deja:<\/strong> tus productos que dejaron plata, del que más ganó al que menos, con la ganancia de cada uno y el acumulado. Arriba te dice con cuántos llegás al 80 % de lo que ganaste. Ejemplo: «Con 5 de tus 8 productos que dejaron plata llegás al 80 % de lo que ganaste». Tocá un producto para ver su detalle.<\/li>\n<li><strong>Calculadora para un producto nuevo:<\/strong> ponés el precio de venta, el costo y el envío, y te dice cuánto te dejaría por unidad, su margen y a qué precio llegarías al objetivo. Usa la comisión, los impuestos y los cupones de tus ventas del período; el envío viene con el correo más común, y con un toque cambiás al de flex. Ejemplo: a $80.000, con un costo de $45.000 y correo, te dice cuánto te queda y si llega al 25 %.<\/li>\n<\/ul>\n<h3>El detalle de un producto<\/h3>\n<p>Tocá un producto para abrir su ficha. Tiene la ganancia y el margen, dos calculadoras, el precio de cada venta a lo largo del mes (los puntos rojos son ventas con margen bajo), cómo le fue contra el mes anterior, su stock, cuánto entra en el pedido y la lista de ventas.<\/p>\n<p><strong>Las dos calculadoras<\/strong> (la segunda, desde la 2.15.0):<\/p>\n<ul>\n<li><strong>«¿Y si lo vendés a…?»:<\/strong> escribís un precio y te dice cuánto ganarías por unidad y con qué margen.<\/li>\n<li><strong>«¿Qué margen querés?»:<\/strong> escribís el margen y te dice a qué precio venderlo. Ejemplo: con un costo de $80.000, un envío de $7.290 y la comisión, los impuestos y los cupones de tus ventas, para ganar el 30 % te dice «Vendelo a $174.921 · te deja $52.476 por unidad». Si el margen es imposible (la comisión, los impuestos y los cupones ya se llevan más), te lo dice.<\/li>\n<\/ul>\n<p><strong>Productos sin ventas<\/strong> (desde la 2.15.0): la ficha se abre aunque el producto no haya tenido ventas en el reporte, si está en la planilla. Se abre desde la tabla de stock, el pedido y el stock parado, o buscándolo en «Productos»: debajo aparece «En tu planilla, sin ventas en este reporte». Muestra el costo (el del último pedido o el de TITULARES), el precio que figura en la planilla, el stock y las dos calculadoras, con la comisión, los impuestos y los cupones promedio de tus ventas del período.<\/p>\n<p><strong>Un perfume que no está en ningún lado<\/strong> (desde la 2.15.0): si lo buscás en «Productos» y no aparece, tocá <strong>«Calcular uno que no está en ningún lado»<\/strong>. Ponés el costo (en dólares, como el precio en Paraguay, o en pesos), el envío, y usás las dos calculadoras. En dólares, la página le suma el 10 % de Sergio PY y lo pasa a pesos al dólar de la planilla. No se guarda en la planilla ni en ningún lado.<\/p>\n<p><strong>Ventas que no entran en el margen<\/strong> (desde la 2.15.0): una venta con la plata devuelta al comprador (por ejemplo, «Le reembolsamos el dinero al comprador» de un reclamo que perdiste) o una fila de Meli sin unidades no cuenta como venta: va con las devoluciones, y en «Alertas» y en los reclamos aparece aparte. Antes entraba como venta y bajaba el margen del producto. Ejemplo: un Montblanc Explorer cobrado a $165.282 y devuelto, con $699 de neto, hacía que ese perfume diera 1,9 % de margen en el mes; ahora da el de sus ventas de verdad.<\/p>\n<p><strong>Un perfume en dos columnas<\/strong> (desde la 2.15.0): si el mismo perfume está en la fila de dos socios en TITULARES (escrito igual o apenas distinto), lo que vendés por tus cuentas cuenta como tuyo, con tu costo. EXCEPCIONES manda sobre esto.<\/p>\n<p><strong>Clásica o Premium<\/strong> (desde la 2.10.0): si el producto tiene cuotas en la pestaña CUOTAS de la planilla, debajo de «Cuotas» te dice cuántas ventas más necesitás si lo vendés en cuotas al precio contado, para ganar lo mismo. Ejemplo: si de contado cada venta te deja $10.000 y en cuotas $8.000, necesitás vender un 25 % más (13 ventas por cada 10). Si en cuotas al precio contado perdés plata, te dice a qué precio publicarlo.<\/p>\n<p><strong>Publicidad<\/strong> (desde la 2.11.0): si el producto tuvo ventas por publicidad, abajo hay un bloque «Publicidad» que viene cerrado; se abre tocando su título. Compara las ventas que el Excel de Meli marca «Venta por publicidad» con las demás: ventas, unidades, facturación, precio promedio, ganancia, ganancia por unidad y margen. Ejemplo: si 11 de las 45 ventas de un perfume vinieron por publicidad, el título dice «11 de 45 ventas vinieron por publicidad (24 %)», y adentro ves si esas ventas te dejaron más o menos por unidad que las otras. La ganancia es antes de pagar los anuncios: el Excel de ventas no trae lo que pagaste por ellos.<\/p>\n<p><strong>A qué precio vendías más<\/strong> (desde la 2.12.0): si en esa compu tenés otros meses guardados en «Mes a mes» con ventas del producto, abajo hay un bloque cerrado con un renglón por mes: el precio promedio, cuántas unidades vendías por semana y la ganancia por unidad, del precio más bajo al más alto. El mes con más ventas por semana dice «más vendió» (un mes de menos de 7 días no cuenta). Ejemplo: si en agosto lo vendías a $80.000 y salían 10 por semana, y en octubre a $90.000 y salen 6, ves que a $80.000 vendías más, y en la ganancia por unidad cuánto te dejaba cada una. En un celular muy angosto (320 px) la ganancia por unidad no entra en esa tabla.<\/p>\n<p><strong>La comisión de Meli subió<\/strong> (desde la 2.12.0): si el producto pagó más comisión que el último mes guardado en el que se vendió a un precio parecido (hasta un 15 % de diferencia), el detalle lo avisa debajo de la comparación con el mes anterior, por ejemplo: «La comisión de Meli subió de 13,0 % a 14,4 % (sep. 2026 → oct. 2026)». Avisa desde medio punto de suba. Puede ser un cambio de Meli en la categoría o más ventas por Premium (que cobra más): fijate el tipo de publicación en Meli. También aparece en «Alertas».<\/p>\n<h3>Envíos<\/h3>\n<p>Cuántos envíos fueron por flex y cuántos por correo, cuánto costó cada uno, a qué provincias vendiste y el flex por zona. Si dos ventas viajaron juntas, el flex se cuenta una sola vez.<\/p>\n<p><strong>Mapa por provincia<\/strong> (desde la 2.13.0): debajo de «A dónde vendiste», un bloque que viene cerrado y se abre tocando su título. Cada cuadradito es una provincia, más o menos donde está (no es a escala), con la parte de tus ventas que fue ahí, escrita y en color: más claro, menos del 2 %; después de 2 a 5 %, de 5 a 15 % y el más fuerte, 15 % o más. Las que no tuvieron ventas quedan grises. Tocá o pasá por una para ver su nombre y sus ventas. Al lado, lo mismo por región (Buenos Aires y CABA, Centro, Cuyo, Noroeste, Noreste, y Patagonia y La Pampa). Ejemplo: con el Excel de octubre de 2026, Buenos Aires dice 41 %, Capital Federal 18 % y Córdoba 13 %; «Buenos Aires y CABA» suma 58 %. Las barras de «A dónde vendiste» siguen igual.<\/p>\n<h3>Cobros en Mercado Pago<\/h3>\n<p>Necesita el reporte de Liquidaciones. Muestra qué plata ya se liberó, cuál falta y en qué fecha se libera (calendario). En amarillo, la plata con la fecha de liberación <strong>vencida<\/strong>: conviene revisarla en Mercado Pago, porque puede ser un reclamo. También cómo te pagan los compradores, en cuántas cuotas y las retenciones de Ingresos Brutos por provincia, que le sirven al contador.<\/p>\n<p><strong>Otros movimientos de la cuenta:<\/strong> lo que no son ventas de Meli (retiros, transferencias, pagos), solo con totales. Desde la 2.9.0, lo que pagaste de la <strong>factura de Meli<\/strong> va primero, en su propio renglón, en vez de mezclarse con tus pagos con QR o tarjeta. No se resta de la ganancia: el Excel no dice qué incluye la factura, y puede repetir cargos que ya se descontaron en cada venta. Ejemplo: si pagaste $121.293 de la factura, ves «Factura de Meli: 1 movimiento, −$121.293», y «Pagos con QR, tarjeta y servicios» baja en ese monto.<\/p>\n<h3>Terceros, gastos y devoluciones<\/h3>\n<ul>\n<li><strong>Plata de otros vendedores:<\/strong> productos de otro socio que se vendieron en tus cuentas, y cuánto le tenés que transferir (ya descontado Meli y el flex).<\/li>\n<li><strong>Gastos grupales:<\/strong> lo que te toca de la pestaña GASTOS GRUPALES.<\/li>\n<li><strong>Devoluciones y cancelaciones:<\/strong> cada una y cuánto te afectó. Las devoluciones «en curso» todavía no se descuentan: quedan en suspenso.<\/li>\n<li><strong>Reclamos y devoluciones por tipo<\/strong> (desde la 2.9.0): un bloque que viene cerrado; se abre tocando su título. Cuenta las ventas canceladas, devueltas, con devolución en curso, devueltas pero cobradas, con reclamo abierto, con reclamo cerrado y con mediación, y una tabla por producto. Una venta puede estar en más de un tipo. Ejemplo: si un producto tuvo 2 cancelaciones y 1 reclamo cerrado de 40 ventas, su renglón dice «Canc. 2 · Recl. cerrados 1 · 3 de 40». Si hay reclamos abiertos, además aparece una alerta con el número de cada venta, y un aviso en «Lo más importante», al final, detrás de lo que ya estaba.<\/li>\n<\/ul>\n<h3>Más análisis (desde la 2.12.0)<\/h3>\n<p>Una sección nueva, entre «Terceros y gastos» y «Alertas», que aparece solo cuando hay algo para mostrar. Tiene bloques que vienen cerrados y se abren tocando su título.<\/p>\n<p><strong>Fechas fuertes:<\/strong><\/p>\n<ul>\n<li>Para cada fecha fuerte que entra entera en lo que cargaste (San Valentín, Hot Sale, Día del Padre, Día del Amigo, Día de la Madre, CyberMonday, Black Friday y Navidad), cuánto vendiste por día en la fecha contra un día normal de antes (hasta 28 días, sin otras fechas fuertes), cuántas veces más y cuándo es la próxima.<\/li>\n<li>En las fechas de regalo cuentan los días en que se compra: por ejemplo, para el Día de la Madre, los 10 días antes del domingo. Hot Sale, CyberMonday y Black Friday cuentan sus 3 días.<\/li>\n<li>Abajo, tus productos en la última vez de la fecha que viene.<\/li>\n<li>Hacen falta al menos 7 días normales antes de la fecha. Hot Sale y CyberMonday los fija la CACE: 2025 y 2026 están confirmados; los otros años dicen «aproximada».<\/li>\n<li>Si una fecha empieza en 30 días o menos y el stock de algún producto no llega, te avisa en «Alertas» y en «Lo más importante», al final, detrás de lo que ya estaba.<\/li>\n<\/ul>\n<p><strong>Ejemplo:<\/strong> con el Excel de octubre de 2026, el Día de la Madre (8 al 17 de octubre) vendiste 6,8 unidades por día contra 2,1 de un día normal: ×3,2. La próxima es del 7 al 16 de octubre de 2027.<\/p>\n<p><strong>Qué se compra junto<\/strong> (desde la 2.13.0): qué productos salen juntos en una misma compra. Cuenta las compras con 2 productos distintos o más: los de un mismo «Paquete de 2 productos» (o de 3, o más) del Excel de Meli, las ventas que viajaron en el mismo envío y, desde la 2.14.0, lo que <strong>un mismo cliente compró el mismo día en compras separadas<\/strong> (abajo de la tabla dice cuántas son de esas). Nunca se muestra quién compró. La tabla muestra los pares que más se repiten (hasta 10) y cuántas veces salieron juntos; al lado, los productos que más salen con otro. Ejemplo: si en el mes hubo 3 paquetes con un perfume y su estuche, el renglón dice «Perfume · Estuche · 3». Con pocas compras, tomalo como una pista. Si ninguna compra tuvo 2 productos distintos, el bloque no aparece (en octubre de 2026 no hubo ninguna).<\/p>\n<p><strong>Clientes que vuelven<\/strong> (desde la 2.14.0): cuántos clientes te compraron en 2 días distintos o más, cada cuántos días vuelven (la mediana: la mitad vuelve antes y la mitad después), cuántos volvieron en este período, cuántos volvieron por algo que ya habían comprado y qué productos compran cuando vuelven. Cuenta este reporte y los meses guardados en esa compu (cada vez que armás un reporte, la página guarda sus clientes, mes por mes, como «Mes a mes»). Ejemplo: si en septiembre y octubre tuviste 200 clientes y 12 compraron en los dos meses, el título dice «12 de 200 clientes compraron más de una vez», y la tabla, qué compraron esos 12 cuando volvieron. Si nadie compró más de una vez, el bloque no aparece: con un solo mes casi nunca hay casos.<\/p>\n<p><strong>Cómo se reconoce a un cliente sin guardar quién es:<\/strong> el Excel de Meli trae el DNI (o CUIT) de cada comprador. Apenas soltás el archivo, tu navegador lo convierte en un código con una clave secreta que se crea al azar en esa compu y queda solo ahí, y el DNI se borra en el momento; el nombre ni se lee. La página nunca muestra el código ni quién compró: solo cantidades y productos. El código tampoco va al Excel ni al resumen para WhatsApp. Por eso:<\/p>\n<ul>\n<li>Cada compu tiene su propia clave: ve los clientes que vuelven con lo que se cargó en ella.<\/li>\n<li>Si borrás los datos del sitio en el navegador, se pierde la clave y lo guardado de clientes empieza de cero.<\/li>\n<li>«Borrar historial» (en «Mes a mes») borra también los clientes guardados de ese perfil.<\/li>\n<\/ul>\n<h3>Alertas<\/h3>\n<p>Lo que conviene corregir en la planilla o mirar en Meli y Mercado Pago, de lo más grave a lo menos grave: publicaciones sin mapear, productos sin costo, plata trabada, productos para reponer y más. Cada alerta lleva la misma etiqueta que «Lo más importante» (▼ Alerta, ◆ Atención o ● Dato) y dice qué hacer. Las que sumaron las versiones 2.8.0 a 2.14.0 (reclamos abiertos, fechas fuertes, comisión, stock parado, factura de Meli y ganancia aproximada) van al final, detrás de las de siempre.<\/p>\n<h3>Cómo se calcula<\/h3>\n<p>Explica de dónde sale cada número, para que cualquiera pueda chequearlo contra los Excel.<\/p>\n<h2 id=\"guia-stock-y-pedido-optimo\">Stock y pedido óptimo<\/h2>\n<p><strong>La tabla de stock<\/strong> muestra, para cada producto tuyo, cuánto stock hay según «Consulta stock» de la planilla (incluido lo que viene en camino), cuánto se vendió y la <strong>cobertura<\/strong>: cuántos días te dura al ritmo de tus ventas (abajo dice de dónde sale). El estado te dice qué hacer:<\/p>\n<ul>\n<li><strong>✕ Sin stock<\/strong> o <strong>▼ Pedir ya:<\/strong> le quedan menos de 10,5 días.<\/li>\n<li><strong>◆ Revisar:<\/strong> menos de 21 días.<\/li>\n<li><strong>✓ OK:<\/strong> alcanza.<\/li>\n<\/ul>\n<p>En la compu, la barra de la cobertura muestra los días que te alcanza: la raya roja marca 10,5 días y la otra, 21.<\/p>\n<p><strong>De dónde sale la venta de cada producto<\/strong> (desde la 2.15.0): de <strong>todo lo que cargaste<\/strong>, no solo del reporte de hoy. Usa los días del reporte y los meses guardados en «Mes a mes» en esa compu (hasta 400 días para atrás), y <strong>lo más reciente pesa más<\/strong>: un día de hace 60 días pesa la mitad que uno de ayer, y uno de hace 120, un cuarto. Los días de fechas fuertes (Día de la Madre, CyberMonday, Navidad y las demás) no cuentan, porque inflan la venta; si querés sumarlas, está la opción del pedido. Si quedan menos de 30 días para calcular (por ejemplo, octubre solo: 31 días menos los del Día de la Madre), lo que falta para llegar a 30 se completa con la «Venta mensual promedio» de la planilla.<\/p>\n<p>Así alcanza con subir <strong>una vez<\/strong> un reporte largo (por ejemplo, el de los últimos 90 días): la página guarda cada mes. Después subís solo el del mes, y el pedido sigue usando esos meses.<\/p>\n<p>Ejemplo: un perfume que vendió 4 en los 15 días del reporte (a ese ritmo serían 8 por mes) y venía vendiendo 6 por mes en los tres meses guardados da <strong>unos 6,5 por mes<\/strong>: lo de ahora pesa más, pero no lo es todo. Antes de la 2.15.0 daba 8. Arriba de la tabla de stock dice desde qué día y cuántos meses guardados usó.<\/p>\n<p><strong>Stock parado por antigüedad<\/strong> (desde la 2.12.0): arriba de «Armá el pedido», un bloque cerrado con los productos que tenés en stock y no se venden hace 30 días o más, por tramos (30 a 59 días, 60 a 89, 90 a 179 y 180 o más) y con la plata que hay ahí (stock × costo de la planilla). La última venta se busca en este reporte y en los meses guardados en «Mes a mes» en esa compu; si no aparece en nada de eso, dice «no está» y los días van con «+», porque son al menos esos. Si alguno pasa los 90 días, también te avisa en «Alertas». Ejemplo: 13 perfumes que se vendieron por última vez el 14/06, con un reporte que llega al 29/10, dicen 137 días y $922.283 parados. Si no hay ninguno, el bloque no aparece.<\/p>\n<h3>Armá el pedido<\/h3>\n<p>La página arma el pedido sola. Vos elegís cuatro cosas:<\/p>\n<ol>\n<li><strong>El tipo de pedido.<\/strong> Cada botón ya muestra cuánto costaría.<ul>\n<li><strong>Óptimo<\/strong> (el recomendado): cubre los días que elijas de los productos que dejan buen margen y solo 21 días de los que están en rojo, para no inmovilizar plata en lo que menos deja.<\/li>\n<li><strong>Mínimo:<\/strong> lo justo para que ningún producto quede con menos de 21 días.<\/li>\n<li><strong>Completo:<\/strong> todos los productos hasta los días que elijas.<\/li>\n<li><strong>Con tope:<\/strong> ponés cuánto podés gastar como máximo, en dólares o en pesos, y la página arma el mejor pedido con esa plata. Primero cubre lo urgente, después el mínimo de todos y después el resto; en cada paso, primero lo que más ganancia deja por cada dólar.<\/li>\n<\/ul>\n<\/li>\n<li><strong>La venta mensual a usar.<\/strong> La página mezcla la venta mensual que figura en la planilla con la de tus ventas (la de la tabla de stock: todo lo cargado, con más peso lo más reciente). Con el deslizador elegís cuánto pesa cada una; al medio es mitad y mitad. Si la planilla dice 0 o está vacía, usa solo tus ventas.<\/li>\n<li><strong>Los días a cubrir:<\/strong> para cuántos días querés comprar (30, si no cambiás nada).<\/li>\n<li><strong>El máximo a gastar<\/strong>, solo en «Con tope».<\/li>\n<\/ol>\n<p><strong>Sumar las fechas fuertes<\/strong> (desde la 2.12.0): una opción que viene apagada. Si la marcás, el pedido suma lo que vendiste de más la última vez en cada fecha fuerte que empieza dentro de los días a cubrir. Ejemplo: para 60 días, con el Black Friday en 29 días y la Navidad en 43, arriba del pedido dice «Suma Black Friday (en 29 días) y Navidad (en 43 días): +2 unidades por lo que vendiste de más la última vez», cada producto dice cuántas suma y el texto para WhatsApp también lo dice. Si en lo que cargaste no hay ninguna fecha fuerte, la opción no se puede marcar.<\/p>\n<p>Debajo aparece cuántas unidades pedir de cada producto, cuánto cuesta (precio en Paraguay + 10% de Sergio PY), para cuántos días te alcanza después y, al lado, lo que dice la planilla en «Cantidad a Comprar», para comparar. Con <strong>«Copiar para WhatsApp»<\/strong> te queda el pedido listo para mandar.<\/p>\n<p><strong>Ejemplo:<\/strong> si el pedido completo cuesta US$2.200 y ponés un tope de US$1.000, la página compra primero lo que se está por quedar sin stock, después lleva todo a 21 días y, si sobra plata, sigue con lo que más ganancia deja. Abajo te dice qué no entró y cuánto faltaría para el óptimo y para el completo.<\/p>\n<p><strong>Ojo:<\/strong><\/p>\n<ul>\n<li>El pedido usa las ventas de las cuentas que pusiste en el reporte. Si vendés esos productos en otras cuentas que no cargaste, la página lo avisa y el pedido puede quedar corto.<\/li>\n<li>Los días que cubre cada producto en el pedido pueden diferir un poco de la tabla de stock: el pedido usa la venta mezclada con la planilla y la tabla usa solo tus ventas.<\/li>\n<li>Los meses guardados viven en esa compu y en ese navegador. En otra compu, la primera vez subí un reporte largo.<\/li>\n<li>La página recuerda cómo dejaste el pedido, en esa compu.<\/li>\n<\/ul>\n<h2 id=\"guia-el-recorrido-guiado-los-cartelitos\">El recorrido guiado (los cartelitos)<\/h2>\n<p>La primera vez que abrís la página aparecen unos <strong>cartelitos<\/strong> sobre la página de verdad: cada uno resalta una parte y explica para qué sirve, en una o dos líneas. Son dos recorridos:<\/p>\n<ul>\n<li><strong>«Antes de cargar»<\/strong> (9 pasos): que todo se procesa en tu compu, el perfil, la planilla, dónde soltar los Excel, que podés soltar varios meses, «Ver mi reporte», esta guía, las novedades y el reporte de ejemplo.<\/li>\n<li><strong>«Tu reporte»<\/strong> (24 pasos): aparece cuando armás tu primer reporte. Muestra la ganancia y el margen, los gastos, lo más importante, las secciones, Clásica o Premium, la publicidad, a qué precio vendías más, «Más sobre tus productos», el stock parado, el pedido, de dónde sale la venta del pedido, el mapa por provincia, la factura de Meli, los reclamos, las fechas fuertes, qué se compra junto, el mismo cliente el mismo día, los clientes que vuelven y los botones de arriba.<\/li>\n<\/ul>\n<p><strong>Cómo se usan:<\/strong><\/p>\n<ul>\n<li>«Siguiente» y «Anterior» pasan de cartelito; arriba dice en qué paso vas, por ejemplo «Paso 2 de 9». En el último, «Listo» lo cierra.<\/li>\n<li><strong>«Omitir»<\/strong> (o la X) cierra el recorrido y <strong>no vuelve a aparecer solo<\/strong>.<\/li>\n<li><strong>«No mostrar más recorridos»<\/strong> apaga también los que vengan con versiones nuevas.<\/li>\n<li><strong>Para verlo de nuevo cuando quieras:<\/strong> tocá el «?» de arriba y, en esta guía, <strong>«Ver el recorrido»<\/strong>. Si ya tenés tu reporte armado, muestra el de tu reporte; «El de la carga» muestra el otro. Si los habías apagado, ahí mismo está «Volver a mostrarlos».<\/li>\n<li><strong>Con el teclado:<\/strong> las flechas → y ← pasan de paso, Enter pasa al siguiente y Esc lo cierra.<\/li>\n<li><strong>En el celular<\/strong> el cartelito va abajo de todo y la página se mueve sola para que se vea lo que señala.<\/li>\n<\/ul>\n<p><strong>Cuando sale una versión nueva<\/strong> que trae algo para ver, la página te muestra <strong>solo eso<\/strong>, con el título «Novedades de la 2.7.0» (o el número que sea). Si la versión nueva no trae nada para mostrar, no aparece ningún cartelito.<\/p>\n<p><strong>Ejemplo:<\/strong> Sergio usaba la 2.13.0. Al abrir la 2.14.0 no ve los 9 pasos de nuevo, y al entrar no ve ningún cartelito (lo nuevo está en el reporte). Cuando arma su reporte ve solo dos: «Nuevo: el mismo cliente» y «Nuevo: clientes que vuelven».<\/p>\n<p>Si tu navegador no deja guardar nada (por ejemplo, si en su configuración bloqueaste los datos de los sitios), la página no puede acordarse de que ya lo viste: en vez de empezar sola, abajo te pregunta «¿Te muestro cómo se usa?».<\/p>\n<p>Los cartelitos nunca salen al imprimir ni en el PDF.<\/p>\n<h2 id=\"guia-botones-utiles\">Botones útiles<\/h2>\n<ul>\n<li><strong>Guía<\/strong> (arriba a la derecha, el signo de pregunta, y al pie): esta guía. Siempre está al día con la versión de la página. Arriba de todo tiene <strong>«Ver el recorrido»<\/strong> (los cartelitos de nuevo) e <strong>«Imprimir o guardar como PDF»<\/strong>, que imprime solo la guía, sin el reporte.<\/li>\n<li><strong>Excel<\/strong> (arriba a la derecha): baja todo el reporte en un Excel con varias hojas: resumen, productos, ventas, terceros, cobros, stock, pedido y alertas.<\/li>\n<li><strong>Resumen para WhatsApp<\/strong> (arriba del reporte): arma un texto con lo más importante del mes (ganancia, facturación, mejores productos, lo que hay que transferir, Mercado Pago, qué reponer y el pedido). Lo copiás y lo pegás.<\/li>\n<li><strong>Imprimir<\/strong> (ícono de impresora, en la versión web): para imprimir el reporte o guardarlo como PDF.<\/li>\n<li><strong>Tamaño: A− y A+<\/strong> (arriba a la derecha): achican o agrandan toda la página (letras, espacios y gráficos) de a un paso, del 85 % al 125 %. En la compu, el botón del medio muestra el tamaño y vuelve al 100 % al tocarlo; en el celular, un aviso te dice en cuánto quedó. La página se acuerda del tamaño en ese navegador. El zoom del navegador (Ctrl + y Ctrl − en la compu, pellizcar en el celular) también anda.<\/li>\n<li><strong>Modo oscuro<\/strong> (ícono de luna, en la versión web): fondo azul noche y letras claras. Tocándolo otra vez volvés al claro.<\/li>\n<li><strong>Ponerte una meta de ganancia…<\/strong> (en el resumen): fijás una ganancia para el mes.<\/li>\n<li><strong>Sumar cuentas o cambiar archivos<\/strong> (arriba del reporte): volvés a la carga sin perder lo que hiciste.<\/li>\n<li><strong>Volver a leer<\/strong> (en «Planilla de costos y stock»): si recién cambiaste algo en ANALISIS, lo trae al momento. Si no lo tocás, la página igual lee la planilla cada vez que se abre.<\/li>\n<\/ul>\n<h2 id=\"guia-version-y-novedades\">Versión y novedades<\/h2>\n<p>Arriba, al lado del nombre de la página, está el número de versión, por ejemplo <strong>v2.7.0<\/strong>. Tocándolo se abren las <strong>Novedades<\/strong>: qué cambió en cada versión, la más nueva primero. El número también está al pie de la página, y en el celular aparece solo ahí.<\/p>\n<ul>\n<li><strong>Un punto en el número<\/strong> quiere decir que la página se actualizó desde tu última visita. Se va cuando abrís las Novedades.<\/li>\n<li><strong>Cómo leer el número:<\/strong> el primero cambia cuando cambia la forma de usar la página, el segundo cuando se suma algo nuevo y el tercero cuando se arregla algo. De 2.6.0 a 2.7.0 hay algo nuevo (el recorrido guiado); de 2.5.0 a 2.5.1, solo arreglos.<\/li>\n<li><strong>Esta guía se actualiza con cada versión<\/strong>: si algo se ve distinto a lo que dice, recargá la página.<\/li>\n<li><strong>Para comparar números con alguien<\/strong>, fijense que los dos tengan la misma versión. Si no, recarguen la página (Ctrl + Shift + R en la compu; en el celular, cerrar la pestaña y volver a abrirla).<\/li>\n<li><strong>El Excel<\/strong> dice con qué versión se hizo, en la segunda línea de la hoja Resumen.<\/li>\n<\/ul>\n<h2 id=\"guia-problemas-comunes-y-como-resolverlos\">Problemas comunes y cómo resolverlos<\/h2>\n<div class=\"guia-tbl-wrap\" tabindex=\"0\" role=\"region\" aria-label=\"Tabla de la guía: Problemas comunes y cómo resolverlos\"><table class=\"guia-tbl\">\n<thead>\n<tr>\n<th>Lo que ves<\/th>\n<th>Qué pasa y qué hacer<\/th>\n<\/tr>\n<\/thead>\n<tbody>\n<tr>\n<td>Arriba dice «Planilla sin conectar»<\/td>\n<td>Ese navegador todavía no está conectado a ANALISIS. Abrí una vez el link largo que te mandó Agus, en esa misma compu o celular.<\/td>\n<\/tr>\n<tr>\n<td>«Planilla: no se pudo leer», «la conexión en vivo falló» o «copia guardada»<\/td>\n<td>La conexión con la planilla no pudo leer (internet, Google tardó, o hay que arreglarla). La página usa la última copia que guardó y te dice de cuándo es. Tocá ese aviso de arriba: dice el motivo. Si dice que hay que actualizar la conexión o compartir ANALISIS, avisale a quien la conectó: se arregla desde su cuenta de Google. Si no, probá «Volver a leer» en un rato.<\/td>\n<\/tr>\n<tr>\n<td>«no parece un reporte de Meli, de Mercado Pago ni la planilla»<\/td>\n<td>Ese archivo no es el Excel de ventas ni el de Liquidaciones, o se modificó al abrirlo. Bajalo de nuevo y soltalo sin abrirlo.<\/td>\n<\/tr>\n<tr>\n<td>«Elegí de qué cuenta es cada archivo»<\/td>\n<td>La página no conoce el número de vendedor de ese archivo. Elegí la cuenta en el selector que aparece al lado.<\/td>\n<\/tr>\n<tr>\n<td>«Falta el Excel de ventas de Meli»<\/td>\n<td>Soltaste solo el de Mercado Pago. El de ventas es obligatorio.<\/td>\n<\/tr>\n<tr>\n<td>«Cobros sin ventas»<\/td>\n<td>Cargaste el reporte de Mercado Pago de una cuenta pero no sus ventas: ese reporte no se usó.<\/td>\n<\/tr>\n<tr>\n<td>«X ventas aparecen en dos cuentas»<\/td>\n<td>El mismo Excel quedó asignado a dos cuentas. Revisá de qué cuenta es cada archivo. Igual se cuentan una sola vez.<\/td>\n<\/tr>\n<tr>\n<td>«X publicaciones sin mapear»<\/td>\n<td>Esas ventas no están en la pestaña MAPPING de la planilla. Hasta que se agreguen, no entran en la ganancia.<\/td>\n<\/tr>\n<tr>\n<td>«X productos sin costo»<\/td>\n<td>Falta el costo en TITULARES o un pedido en PEDIDOS. Sin costo no se puede calcular la ganancia de ese producto.<\/td>\n<\/tr>\n<tr>\n<td>«X productos sin vendedor en TITULARES»<\/td>\n<td>Se tomaron como tuyos. Si son de otro socio, hay que cargar el vendedor en la planilla.<\/td>\n<\/tr>\n<tr>\n<td>«Códigos postales de flex sin tarifa»<\/td>\n<td>Un código postal que no está en el tarifario: se usó un precio promedio. Hay que cargarlo en «CPs a AGREGAR» de la planilla.<\/td>\n<\/tr>\n<tr>\n<td>«Ventas que no aparecen en el reporte de Mercado Pago»<\/td>\n<td>El reporte de Mercado Pago es de otras fechas o se pidió antes que el de Meli. Pedilo de nuevo con las mismas fechas.<\/td>\n<\/tr>\n<tr>\n<td>«Con la fecha de liberación vencida»<\/td>\n<td>Mercado Pago no liberó esa plata aunque ya pasó la fecha: puede ser un reclamo o una retención. Revisalo en Mercado Pago.<\/td>\n<\/tr>\n<tr>\n<td>«Ventas con precio $0 en el Excel de Meli»<\/td>\n<td>Es una falla del Excel de Meli. La página las completó con el promedio de ese producto.<\/td>\n<\/tr>\n<tr>\n<td>Los números no te coinciden con otro lado<\/td>\n<td>Revisá que los archivos sean del mismo período y que estén marcadas todas las cuentas. Al final de la página, «Cómo se calcula» explica cada número.<\/td>\n<\/tr>\n<tr>\n<td>El período termina antes de fin de mes<\/td>\n<td>La página cuenta desde la primera hasta la última venta del archivo. Si los últimos días no hubo ventas, termina antes. Para los gastos podés elegir «Mes completo».<\/td>\n<\/tr>\n<tr>\n<td>En el celular una tabla no entra<\/td>\n<td>Deslizala con el dedo hacia el costado: la sombra en el borde te avisa que hay más.<\/td>\n<\/tr>\n<tr>\n<td>Ves números que no son tuyos<\/td>\n<td>Fijate si dice EJEMPLO: son datos inventados hasta que cargues tus archivos.<\/td>\n<\/tr>\n<tr>\n<td>Un socio no ve lo mismo que vos<\/td>\n<td>La meta, el historial «mes a mes», los clientes guardados y cómo dejaste el pedido se guardan en cada compu. La planilla y los cálculos son los mismos para todos.<\/td>\n<\/tr>\n<tr>\n<td>Un punto en el número de arriba, o el aviso «La página se actualizó»<\/td>\n<td>Es normal: hay una versión nueva. Tocá el número para ver qué cambió; el punto se va solo.<\/td>\n<\/tr>\n<tr>\n<td>Aparecieron unos cartelitos sobre la página<\/td>\n<td>Es el recorrido guiado: te muestra cómo se usa. Seguilo con «Siguiente» o cerralo con «Omitir»; no vuelve solo. Lo volvés a ver desde «?» → «Ver el recorrido».<\/td>\n<\/tr>\n<tr>\n<td>No aparece «A qué precio vendías más» ni el aviso de la comisión<\/td>\n<td>Hace falta otro mes guardado en «Mes a mes» en esa compu con ventas del producto. Armá una vez el reporte del mes anterior (o soltá varios meses juntos) y después el de este mes.<\/td>\n<\/tr>\n<tr>\n<td>No aparece «Más análisis»<\/td>\n<td>Todavía no hay ninguna fecha fuerte entera en lo que cargaste, con 7 días normales antes, ni compras con 2 productos distintos. Con los Excel de esas fechas aparece sola.<\/td>\n<\/tr>\n<tr>\n<td>No aparece el mapa por provincia<\/td>\n<td>El Excel de Meli no trae la provincia de ninguna venta (columna «Provincia»), o no se reconoce. Las ventas sin provincia se cuentan en la nota del mapa.<\/td>\n<\/tr>\n<tr>\n<td>No aparece «Qué se compra junto»<\/td>\n<td>Ninguna compra tuvo 2 productos distintos, ni en un paquete, ni en el mismo envío, ni del mismo cliente el mismo día. Es normal: en octubre de 2026 no hubo ninguna.<\/td>\n<\/tr>\n<tr>\n<td>No aparece «Clientes que vuelven»<\/td>\n<td>Ningún cliente compró en 2 días distintos en lo cargado en esa compu. Con un solo mes casi no hay casos: armá los reportes de varios meses (o soltá varios meses juntos). Si el Excel no trae el DNI del comprador, tampoco aparece.<\/td>\n<\/tr>\n<tr>\n<td>En otra compu los clientes que vuelven dan distinto<\/td>\n<td>Es normal: cada compu tiene su propia clave y cuenta lo que se cargó en ella.<\/td>\n<\/tr>\n<tr>\n<td>Los cartelitos no aparecen<\/td>\n<td>Ya los viste, los cerraste con «Omitir» o tocaste «No mostrar más recorridos». Abrí la guía («?») y tocá «Ver el recorrido».<\/td>\n<\/tr>\n<\/tbody>\n<\/table><\/div>\n<h2 id=\"guia-glosario\">Glosario<\/h2>\n<div class=\"guia-tbl-wrap\" tabindex=\"0\" role=\"region\" aria-label=\"Tabla de la guía: Glosario\"><table class=\"guia-tbl\">\n<thead>\n<tr>\n<th>Palabra<\/th>\n<th>Qué quiere decir<\/th>\n<\/tr>\n<\/thead>\n<tbody>\n<tr>\n<td>Facturación<\/td>\n<td>Lo que pagaron los compradores por tus productos. No es lo que te queda.<\/td>\n<\/tr>\n<tr>\n<td>Te deposita Meli<\/td>\n<td>Lo que te queda después de lo que cobra Meli (comisión, envío por correo, impuestos y cupones), antes del flex y la mercadería.<\/td>\n<\/tr>\n<tr>\n<td>Ganancia de tus productos<\/td>\n<td>Lo que te deposita Meli, menos el flex y el costo de la mercadería.<\/td>\n<\/tr>\n<tr>\n<td>Ganancia neta<\/td>\n<td>La ganancia de tus productos, menos devoluciones y gastos grupales: lo que te quedó en el bolsillo.<\/td>\n<\/tr>\n<tr>\n<td>Margen<\/td>\n<td>De cada $100 que facturaste, cuántos te quedaron de ganancia. 25% = $25 de cada $100.<\/td>\n<\/tr>\n<tr>\n<td>Semáforo<\/td>\n<td>Rojo: margen menor a 24%. Amarillo: entre 24% y 28%. Verde: 28% o más.<\/td>\n<\/tr>\n<tr>\n<td>Flex<\/td>\n<td>Envíos de Mercado Envíos Flex: no los hace el correo de Meli, se pagan aparte según la zona del código postal.<\/td>\n<\/tr>\n<tr>\n<td>Bonificación flex<\/td>\n<td>Lo que Meli te devuelve por cada envío flex.<\/td>\n<\/tr>\n<tr>\n<td>Cupones<\/td>\n<td>Descuentos que Meli le hace al comprador y te descuenta a vos.<\/td>\n<\/tr>\n<tr>\n<td>IIBB<\/td>\n<td>Ingresos Brutos: impuesto que te retienen en cada venta, según la provincia.<\/td>\n<\/tr>\n<tr>\n<td>Liberado / por liberar<\/td>\n<td>Plata que Mercado Pago ya te dejó disponible, o que todavía retiene hasta una fecha.<\/td>\n<\/tr>\n<tr>\n<td>Vencido<\/td>\n<td>Plata que debía estar liberada y no lo está. Hay que revisarla en Mercado Pago.<\/td>\n<\/tr>\n<tr>\n<td>Terceros<\/td>\n<td>Productos de otro socio que se vendieron en tus cuentas. Esa plata es de él.<\/td>\n<\/tr>\n<tr>\n<td>Gastos grupales<\/td>\n<td>Gastos que se pagan entre todos (insumos, contador, monotributo…), según la pestaña GASTOS GRUPALES.<\/td>\n<\/tr>\n<tr>\n<td>Cobertura<\/td>\n<td>Cuántos días te dura el stock al ritmo de venta actual.<\/td>\n<\/tr>\n<tr>\n<td>Mapear<\/td>\n<td>Decirle a la planilla (pestaña MAPPING) a qué producto corresponde cada publicación de Meli.<\/td>\n<\/tr>\n<tr>\n<td>Período<\/td>\n<td>Desde la primera hasta la última venta de los archivos que cargaste.<\/td>\n<\/tr>\n<tr>\n<td>Fecha fuerte<\/td>\n<td>Una fecha del año en que se vende más (Hot Sale, Día de la Madre, Black Friday, Navidad y otras). «×3,2» quiere decir que por día vendiste 3,2 veces lo de un día normal.<\/td>\n<\/tr>\n<tr>\n<td>Stock parado<\/td>\n<td>Stock de un producto que no se vende hace 30 días o más, con la plata que hay ahí al costo de la planilla.<\/td>\n<\/tr>\n<tr>\n<td>Cliente que vuelve<\/td>\n<td>Un cliente que te compró en 2 días distintos o más, en lo cargado en esa compu.<\/td>\n<\/tr>\n<tr>\n<td>Código de cliente<\/td>\n<td>Lo que arma tu navegador con el DNI del Excel y una clave secreta que queda solo en esa compu, para reconocer al mismo cliente sin guardar quién es. Nunca se muestra.<\/td>\n<\/tr>\n<tr>\n<td>Paquete<\/td>\n<td>Una compra con varios productos que Meli manda junta. En el Excel aparece como «Paquete de 2 productos» (o de 3, o más) con cada producto debajo.<\/td>\n<\/tr>\n<tr>\n<td>Región<\/td>\n<td>Grupo de provincias del mapa: Buenos Aires y CABA; Centro (Córdoba, Santa Fe y Entre Ríos); Cuyo (Mendoza, San Juan y San Luis); Noroeste; Noreste; y Patagonia y La Pampa.<\/td>\n<\/tr>\n<tr>\n<td>Perfil y cuentas<\/td>\n<td>El perfil es la persona (Surak, Ana, Sergio, A Viajar o Agus); las cuentas son sus cuentas de Mercado Libre.<\/td>\n<\/tr>\n<\/tbody>\n<\/table><\/div>", "secciones": [["guia-que-es-y-para-que-sirve", "Qué es y para qué sirve"], ["guia-antes-de-empezar-que-necesitas", "Antes de empezar: qué necesitás"], ["guia-paso-a-paso-armar-tu-reporte", "Paso a paso: armar tu reporte"], ["guia-como-leer-el-resumen-de-arriba", "Cómo leer el resumen de arriba"], ["guia-seccion-por-seccion", "Sección por sección"], ["guia-stock-y-pedido-optimo", "Stock y pedido óptimo"], ["guia-el-recorrido-guiado-los-cartelitos", "El recorrido guiado (los cartelitos)"], ["guia-botones-utiles", "Botones útiles"], ["guia-version-y-novedades", "Versión y novedades"], ["guia-problemas-comunes-y-como-resolverlos", "Problemas comunes y cómo resolverlos"], ["guia-glosario", "Glosario"]]}; })(globalThis.RV = globalThis.RV || {});
 
 /* ============================================================
    parsers.js — leer los archivos de Meli / Mercado Pago y las
@@ -2536,15 +2593,19 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
     const { H, filas } = filasConEncabezado(aoa, ['Producto']);
     const c = (...al) => colByAlias(H, al);
     const i = { prod: c('Producto'), contado: c('Precio CONTADO'), rent: c('Rentabilidad precio contado%', 'Rentabilidad precio contado'),
-      cuotas: c('CUOTAS'), minimo: c('MINIMO PARA MISMA RENT EN CUOTAS', 'Mínimo para misma rent en cuotas') };
+      cuotas: c('CUOTAS'), minimo: c('MINIMO PARA MISMA RENT EN CUOTAS', 'Mínimo para misma rent en cuotas'), vendedor: c('Vendedor') };
     if (i.prod === -1 || i.cuotas === -1) return new Map();
     const out = new Map();
     for (const f of filas) {
       if (U.isEmpty(f[i.prod])) continue;
       const cuotas = String(f[i.cuotas] || '').trim();
       if (!cuotas) continue;
-      out.set(U.norm(f[i.prod]), { cuotas, contado: i.contado !== -1 ? U.numOrNull(f[i.contado]) : null, rent: i.rent !== -1 ? U.numOrNull(f[i.rent]) : null,
-        minimo: i.minimo !== -1 ? U.numOrNull(f[i.minimo]) : null });
+      const q = { cuotas, contado: i.contado !== -1 ? U.numOrNull(f[i.contado]) : null, rent: i.rent !== -1 ? U.numOrNull(f[i.rent]) : null,
+        minimo: i.minimo !== -1 ? U.numOrNull(f[i.minimo]) : null };
+      const k = U.norm(f[i.prod]);
+      out.set(k, q);
+      // 2.15.0: el mismo producto para dos vendedores (dos filas): cada uno con la suya, como «producto|VENDEDOR»
+      if (i.vendedor !== -1 && !U.isEmpty(f[i.vendedor])) out.set(k + '|' + String(f[i.vendedor]).trim().toUpperCase(), q);
     }
     return out;
   };
@@ -2739,6 +2800,8 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
     const tit = P.titulares(titAoa);
     const productos = new Map();
     for (const p of tit.productos) if (!productos.has(p.key)) productos.set(p.key, p);
+    // 2.15.0: TODAS las filas de TITULARES, también el mismo producto repetido con otro vendedor (antes quedaba solo la primera)
+    const fichas = tit.productos;
     const dolar = tit.dolar;
 
     let mapping = new Map();
@@ -2757,15 +2820,19 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
     const gasAoa = tab(['GASTOS GRUPALES']);
     const gastos = gasAoa ? P.gastosGrupales(gasAoa) : null;
 
-    let stock = null, stockUltimaAct = null, stockFuente = null;
+    let stock = null, stockLista = null, stockUltimaAct = null, stockFuente = null;
     const stoAoa = tab(['Consulta stock', 'STOCK', 'CONSULTA STOCK']);
     const st = stoAoa ? P.stock(stoAoa) : null;
     if (st && st.items.length) {
       stock = new Map(); for (const it of st.items) if (!stock.has(it.producto)) stock.set(it.producto, it);
+      stockLista = st.items; // 2.15.0: todas las filas (el mismo producto puede estar para dos vendedores)
       stockUltimaAct = st.ultimaAct; stockFuente = 'Consulta stock';
     } else if (tit.columnas.stock) {
-      stock = new Map();
-      for (const p of productos.values()) if (p.stock != null) stock.set(p.key, { producto: p.key, nombre: p.nombre, vendedor: p.vendedor, fisico: p.stock, camino: null, total: p.stock, estadoPlanilla: p.estadoStock });
+      stock = new Map(); stockLista = [];
+      for (const p of fichas) if (p.stock != null) {
+        const it = { producto: p.key, nombre: p.nombre, vendedor: p.vendedor, fisico: p.stock, camino: null, total: p.stock, estadoPlanilla: p.estadoStock };
+        stockLista.push(it); if (!stock.has(p.key)) stock.set(p.key, it);
+      }
       stockFuente = 'TITULARES';
     }
 
@@ -2790,8 +2857,8 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
 
     return {
       origen, tipo: analisis ? 'analisis' : 'auxiliar', fetchedAt: Date.now(),
-      productos, mapping, excepciones, pedidos, pedidosLista, gastos, dolar,
-      stock, stockUltimaAct, stockFuente, tarifa, tarifaFuente, tarifaProm, tarifaAgregados: agregados, cuotas, warnings,
+      productos, fichas, mapping, excepciones, pedidos, pedidosLista, gastos, dolar,
+      stock, stockLista, stockUltimaAct, stockFuente, tarifa, tarifaFuente, tarifaProm, tarifaAgregados: agregados, cuotas, warnings,
       pestanas: Object.keys(src),
     };
   };
@@ -2801,8 +2868,8 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
     if (!model || model.origen === 'demo') return;
     const plain = {
       v: 2, origen: model.origen, tipo: model.tipo, fetchedAt: model.fetchedAt, leidaEn: model.leidaEn || null, dolar: model.dolar,
-      productos: [...model.productos.values()], mapping: [...model.mapping.entries()], excepciones: model.excepciones,
-      pedidosLista: model.pedidosLista, gastos: model.gastos, stock: model.stock ? [...model.stock.values()] : null,
+      productos: [...model.productos.values()], fichas: model.fichas || null, mapping: [...model.mapping.entries()], excepciones: model.excepciones,
+      pedidosLista: model.pedidosLista, gastos: model.gastos, stock: model.stock ? (model.stockLista || [...model.stock.values()]) : null,
       stockUltimaAct: model.stockUltimaAct, stockFuente: model.stockFuente,
       tarifaExtra: Object.fromEntries(Object.entries(model.tarifa || {}).filter(([, t]) => t.fuente !== 'pagina')), tarifaFuente: model.tarifaFuente,
       tarifaAgregados: model.tarifaAgregados || [], cuotas: model.cuotas ? [...model.cuotas.entries()] : [],
@@ -2815,14 +2882,17 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
     try {
       const fix = o => { for (const k of ['fecha', 'desde', 'hasta', 'fechaInclusion']) if (o[k]) o[k] = new Date(o[k]); return o; };
       const productos = new Map(p.productos.map(x => [x.key, fix(x)]));
+      const fichas = Array.isArray(p.fichas) ? p.fichas.map(fix) : [...productos.values()];
       const pedidosLista = p.pedidosLista.map(fix);
       const pedidos = U.groupBy(pedidosLista, x => x.producto);
-      const stock = p.stock ? new Map(p.stock.map(x => [x.producto, x])) : null;
+      const stockLista = p.stock ? p.stock : null;
+      const stock = stockLista ? new Map() : null;
+      if (stock) for (const x of stockLista) if (!stock.has(x.producto)) stock.set(x.producto, x);
       const tarifa = Object.assign(S.tarifaBase(), p.tarifaExtra || {});
       return {
-        origen: p.origen, tipo: p.tipo, fetchedAt: p.fetchedAt, leidaEn: p.leidaEn, dolar: p.dolar, productos,
+        origen: p.origen, tipo: p.tipo, fetchedAt: p.fetchedAt, leidaEn: p.leidaEn, dolar: p.dolar, productos, fichas,
         mapping: new Map(p.mapping), excepciones: p.excepciones.map(fix), pedidos, pedidosLista, gastos: p.gastos,
-        stock, stockUltimaAct: p.stockUltimaAct, stockFuente: p.stockFuente, tarifa, tarifaFuente: p.tarifaFuente,
+        stock, stockLista, stockUltimaAct: p.stockUltimaAct, stockFuente: p.stockFuente, tarifa, tarifaFuente: p.tarifaFuente,
         tarifaProm: U.sum(Object.values(tarifa), t => t.costo) / (Object.keys(tarifa).length || 1), tarifaAgregados: p.tarifaAgregados || [],
         cuotas: new Map(p.cuotas || []), warnings: [], restaurado: true,
       };
@@ -2857,36 +2927,132 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
   // ---------- Estado de la venta ----------
   E.clasificarEstado = (estado) => {
     const n = U.normPlain(estado);
-    const excluida = C.EXCLUSION.some(p => n.includes(p));
+    // 2.15.0: «Le reembolsamos el dinero al comprador» (reclamo perdido) no decía «devolución» y entraba como venta
+    const reembolso = /reembols/.test(n) && /comprador/.test(n) && !/te dimos|te acreditamos|te pagamos/.test(n);
+    const excluida = reembolso || C.EXCLUSION.some(p => n.includes(p));
     if (!excluida) return { excluida: false, tipo: 'ok' };
+    if (reembolso && !C.EXCLUSION.some(p => n.includes(p))) return { excluida: true, tipo: 'devolucion', reembolso: true };
     if (n.includes('cancelad')) return { excluida: true, tipo: 'cancelada' };
     if (/en camino|en curso|esperando|en preparacion|devolveremos|en proceso|pendiente/.test(n)) return { excluida: true, tipo: 'devolucion_curso' };
     return { excluida: true, tipo: 'devolucion' };
   };
 
+  // ---------- Las filas de TITULARES de cada producto (2.15.0) ----------
+  // El mismo perfume puede estar en varias filas, una por vendedor («la columna de cada uno»), y escrito apenas
+  // distinto. El índice junta las filas por «núcleo» (U.nucleoProducto) y se arma una vez por planilla.
+  const IDX = new WeakMap();
+  E.indice = (model) => {
+    let I = model && IDX.get(model);
+    if (I) return I;
+    const fichas = model && Array.isArray(model.fichas) && model.fichas.length ? model.fichas : [...((model && model.productos) || new Map()).values()];
+    const porNucleo = new Map(), porKey = new Map();
+    for (const f of fichas) {
+      if (!f || !f.key) continue;
+      if (!porKey.has(f.key)) porKey.set(f.key, []);
+      porKey.get(f.key).push(f);
+      const n = U.nucleoProducto(f.nombre || f.key).nucleo;
+      if (!n) continue;
+      if (!porNucleo.has(n)) porNucleo.set(n, []);
+      porNucleo.get(n).push(f);
+    }
+    const pedNucleo = new Map();
+    for (const [k, arr] of ((model && model.pedidos) || new Map())) {
+      const n = U.nucleoProducto(k).nucleo; if (!n) continue;
+      if (!pedNucleo.has(n)) pedNucleo.set(n, []);
+      pedNucleo.get(n).push(k);
+    }
+    I = { fichas, porNucleo, porKey, pedNucleo };
+    if (model && typeof model === 'object') IDX.set(model, I);
+    return I;
+  };
+  const generoDe = f => U.nucleoProducto(f.nombre || f.key).genero;
+  // Las filas que son el mismo producto que «nombre». Sin género en el nombre y con filas de hombre y de mujer
+  // en el mismo núcleo, es ambiguo: quedan solo las filas escritas exactamente igual.
+  E.grupoDe = (model, nombre) => {
+    const I = E.indice(model), key = U.norm(nombre), n = U.nucleoProducto(nombre);
+    const exactas = I.porKey.get(key) || [];
+    if (!n.nucleo) return exactas.slice();
+    const cands = I.porNucleo.get(n.nucleo) || [];
+    const g = n.genero || (exactas.map(generoDe).find(Boolean)) || null;
+    if (g) return cands.filter(f => U.generoCompatible(generoDe(f), g));
+    if (U.uniq(cands.map(generoDe).filter(Boolean)).length > 1) return exactas.slice();
+    return cands.slice();
+  };
+  // La fila de ese producto que es de ese dueño (o la escrita igual, o la que haya)
+  E.fichaDe = (model, key, dueño) => {
+    const g = E.grupoDe(model, key);
+    return g.find(f => f.key === key && f.vendedor === dueño) || g.find(f => f.vendedor === dueño) || g.find(f => f.key === key)
+      || (model.productos && model.productos.get(key)) || null;
+  };
+  // Los pedidos (pestaña PEDIDOS) de ese producto, con sus nombres parecidos; si el producto es de varios
+  // vendedores, solo los del dueño (cada uno compra el suyo)
+  E.pedidosDe = (model, key, dueño) => {
+    const I = E.indice(model), n = U.nucleoProducto(key);
+    const keys = new Set([key]);
+    for (const k of (n.nucleo ? I.pedNucleo.get(n.nucleo) || [] : [])) if (U.mismoProducto(k, key)) keys.add(k);
+    let hist = [];
+    for (const k of keys) hist = hist.concat((model.pedidos && model.pedidos.get(k)) || []);
+    const vendedores = U.uniq(E.grupoDe(model, key).map(f => f.vendedor).filter(Boolean));
+    if (vendedores.length > 1 && dueño) hist = hist.filter(h => h.vendedor === dueño);
+    return hist.sort((a, b) => a.fecha - b.fecha);
+  };
+
+  // ---------- Filas raras (2.15.0) ----------
+  // Una venta que Meli no marca como cancelada ni devuelta, pero cuya plata volvió al comprador (un reclamo cerrado
+  // con reembolso), o una fila sin unidades o con ingresos negativos (un ajuste). Si entraran como ventas, un solo
+  // reclamo hunde la ganancia y el margen del producto y de todo el reporte. Se apartan como una devolución terminada:
+  // su plata (lo que dejó o se llevó Meli, menos el flex) va a «Devoluciones, cancelaciones y reclamos».
+  E.filaRara = (v) => {
+    if (!v || v.esCabeceraPaquete || v.paqueteSinDetalle) return null;
+    const n = x => (typeof x === 'number' && isFinite(x) ? x : 0);
+    const ing = n(v.ingresos), tot = n(v.total), anul = n(v.anulaciones), u = n(v.unidades);
+    if (ing < 0) return { tipo: 'devolucion', motivo: 'ingresos negativos (un ajuste de Meli)' };
+    if (!(u > 0)) return (ing || tot) ? { tipo: 'devolucion', motivo: 'una fila sin unidades (un ajuste de Meli)' } : null;
+    if (ing > 0 && tot <= 0) return { tipo: 'devolucion', motivo: 'Meli le devolvió la plata al comprador' };
+    if (ing > 0 && anul < 0 && -anul >= 0.5 * ing) return { tipo: 'devolucion', motivo: 'Meli le devolvió la mayor parte al comprador' };
+    return null;
+  };
+
   // ---------- Costo vigente a la fecha de la venta ----------
-  const costoParaFecha = (model, key, fecha) => {
-    const hist = model.pedidos.get(key);
-    if (hist && hist.length && fecha) {
+  const costoParaFecha = (model, key, fecha, dueño) => {
+    const hist = E.pedidosDe(model, key, dueño);
+    if (hist.length && fecha) {
       let best = null;
       for (const h of hist) if (h.fecha <= fecha && (!best || h.fecha >= best.fecha)) best = h;
       if (best) return { costo: best.costo, fuente: 'pedido', fecha: best.fecha, precioPY: best.precioPY };
     }
-    const p = model.productos.get(key);
+    const p = E.fichaDe(model, key, dueño);
     if (p && p.costo != null && isFinite(p.costo)) return { costo: p.costo, fuente: 'titulares', fecha: null, precioPY: p.precioPY };
     return { costo: null, fuente: null };
   };
+  E.costoParaFecha = costoParaFecha;
 
-  const dueñoPara = (model, key, fecha, perfil) => {
-    const reglas = (model.excepciones || []).filter(e => e.producto === key &&
+  // ---------- Dueño de la venta (2.15.0: con el mismo producto para varios vendedores) ----------
+  // 1) EXCEPCIONES (en esa fecha era de otro); 2) si una sola persona lo tiene en TITULARES, es suyo;
+  // 3) si lo tienen varios: el de la cuenta que lo vendió (A VIAJAR), si no el del perfil del reporte («está en
+  // tu columna»), si no el dueño de esa cuenta, y si no la fila escrita igual que en MAPPING (como antes).
+  const perfilesDeCuenta = cuenta => C.PERFILES.filter(p => perfilDe(p.id).cuentas.includes(cuenta)).map(p => p.id);
+  E.resolverDueño = (model, nombre, fecha, perfil, cuenta) => {
+    const key = U.norm(nombre);
+    const grupo = E.grupoDe(model, nombre);
+    const reglas = (model.excepciones || []).filter(e => (e.producto === key || U.mismoProducto(e.producto, nombre)) &&
       (!e.desde || (fecha && fecha >= e.desde)) && (!e.hasta || (fecha && fecha <= e.hasta)));
+    const vendedores = U.uniq(grupo.map(f => f.vendedor).filter(Boolean));
+    let dueño, fuente;
     if (reglas.length) {
       const r = reglas.find(x => x.vendedor === perfil) || reglas[0];
-      return { dueño: r.vendedor, fuente: 'excepcion' };
+      dueño = r.vendedor; fuente = 'excepcion';
+    } else if (!vendedores.length) { dueño = perfil; fuente = 'asumido'; }
+    else if (vendedores.length === 1) { dueño = vendedores[0]; fuente = 'titulares'; }
+    else {
+      const cu = String(cuenta || '').trim().toUpperCase(), deCuenta = perfilesDeCuenta(cu);
+      const exacta = grupo.find(f => f.key === key && f.vendedor);
+      dueño = vendedores.includes(cu) ? cu : vendedores.includes(perfil) ? perfil
+        : vendedores.find(x => deCuenta.includes(x)) || (exacta ? exacta.vendedor : vendedores[0]);
+      fuente = 'titulares';
     }
-    const p = model.productos.get(key);
-    if (p && p.vendedor) return { dueño: p.vendedor, fuente: 'titulares' };
-    return { dueño: perfil, fuente: 'asumido' };
+    const ficha = grupo.find(f => f.key === key && f.vendedor === dueño) || grupo.find(f => f.vendedor === dueño) || grupo.find(f => f.key === key) || null;
+    return { dueño, fuente, ficha, vendedores };
   };
 
   const costoFlex = (model, v) => {
@@ -2922,7 +3088,9 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
         v.cuenta = cta.cuenta;
         const est = E.clasificarEstado(v.estado);
         v.excluida = est.excluida; v.tipoEstado = est.tipo;
+        if (est.reembolso) v.rara = 'Meli le devolvió la plata al comprador';
         v.devueltaCobrada = !v.excluida && /devolvieron|devuelto|reembols/.test(U.normPlain(v.estado + ' ' + v.estadoDesc));
+        if (!v.excluida) { const r = E.filaRara(v); if (r) { v.excluida = true; v.tipoEstado = r.tipo; v.rara = r.motivo; v.devueltaCobrada = false; } }
         // Producto
         const nombre = model.mapping.get(U.norm(v.titulo));
         v.productoNombre = nombre || null;
@@ -2955,13 +3123,16 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
     for (const v of ventas) if (!v.producto && v.sku && skuAProducto.has(v.sku)) {
       v.productoNombre = skuAProducto.get(v.sku); v.producto = U.norm(v.productoNombre); v.mapeo = 'sku';
     }
-    // Dueño, costo, ganancia
+    // Dueño, costo, ganancia. 2.15.0: si el producto es de varios vendedores, la venta toma la fila de su dueño
+    // (su nombre, su costo y sus pedidos), así «Tommy Girl» vendido por AGUS es el de AGUS aunque MAPPING apunte al de SURAK.
     for (const v of ventas) {
       v.dueño = null; v.dueñoFuente = null; v.costoU = null; v.costoFuente = null;
       if (v.producto) {
-        const d = dueñoPara(model, v.producto, v.fecha, perfil.id);
+        const d = E.resolverDueño(model, v.productoNombre, v.fecha, perfil.id, v.cuenta);
+        if (d.ficha && d.ficha.key !== v.producto) { v.productoNombre = d.ficha.nombre; v.producto = d.ficha.key; }
         v.dueño = d.dueño; v.dueñoFuente = d.fuente;
-        const c = costoParaFecha(model, v.producto, v.fecha);
+        if (d.vendedores.length > 1) v.dueñoVarios = d.vendedores;
+        const c = costoParaFecha(model, v.producto, v.fecha, v.dueño);
         v.costoU = c.costo; v.costoFuente = c.fuente; v.costoFecha = c.fecha;
       }
       v.esMia = v.dueño === perfil.id;
@@ -3088,7 +3259,7 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
     if (flexMio) waterfall.push({ id: 'flex', label: 'Flex (logística)', value: -flexMio, kind: 'delta' });
     waterfall.push({ id: 'cogs', label: 'Mercadería (costo)', value: -cogs, kind: 'delta' });
     waterfall.push({ id: 'gb', label: 'Ganancia de tus productos', value: gananciaBruta, kind: 'subtotal' });
-    if (Math.abs(impactoDevoluciones) >= 1) waterfall.push({ id: 'dev', label: 'Devoluciones y cancelaciones', value: impactoDevoluciones, kind: 'delta' });
+    if (Math.abs(impactoDevoluciones) >= 1) waterfall.push({ id: 'dev', label: excMias.some(v => v.rara) ? 'Devoluciones, cancelaciones y reclamos' : 'Devoluciones y cancelaciones', value: impactoDevoluciones, kind: 'delta' });
     if (gastos) waterfall.push({ id: 'gas', label: gastos.esPromedio ? 'Gastos grupales (estimado)' : 'Gastos grupales', value: -gastosTotal, kind: 'delta' });
     waterfall.push({ id: 'neta', label: 'Ganancia neta', value: gananciaNeta, kind: 'end' });
 
@@ -3166,8 +3337,10 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
     // Con varios meses (más de 31 días), la venta diaria sale de los últimos 30 días del período (2.8.0)
     const ventanaStock = multimes ? { desde: U.addDays(hasta, -(C.STOCK_VENTANA_DIAS - 1)), hasta, dias: C.STOCK_VENTANA_DIAS } : null;
     const validasStock = ventanaStock ? validas.filter(v => v.fecha && v.fecha >= ventanaStock.desde) : validas;
-    const stock = E.stock(model, validasStock, perfil, op, ventanaStock ? ventanaStock.dias : dias, cuentas.map(c => c.cuenta));
-    if (stock) stock.ventana = ventanaStock;
+    // 2.15.0: la venta diaria de cada producto, ponderada (lo reciente pesa más) con todo lo cargado
+    const pond = desde ? E.ventaPonderada({ validas, perfil, desde, hasta, dias, cuentas: cuentas.map(c => c.cuenta), historial: input.historialDemo || null }) : null;
+    const stock = E.stock(model, validasStock, perfil, op, ventanaStock ? ventanaStock.dias : dias, cuentas.map(c => c.cuenta), pond);
+    if (stock) { stock.ventana = ventanaStock; stock.pond = pond ? { diasDatos: pond.diasDatos, diasReporte: pond.diasReporte, meses: pond.meses, desde: pond.desdeDatos, sinFechas: pond.sinFechas, vidaMedia: pond.vidaMedia } : null; }
 
     // ---------- 9 b. Reclamos y devoluciones por tipo y producto (2.9.0, R14) ----------
     const reclamos = E.reclamos(ventas);
@@ -3238,6 +3411,7 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
     { id: 'abierto', nombre: 'Reclamos abiertos', es: v => !!v.reclamo },
     { id: 'cerrado', nombre: 'Reclamos cerrados', es: v => !!v.reclamoCerrado && !v.reclamo },
     { id: 'mediacion', nombre: 'Con mediación de Meli', es: v => !!v.mediacion },
+    { id: 'apartada', nombre: 'Con la plata devuelta al comprador o ajustes (fuera del margen)', es: v => !!v.rara }, // 2.15.0
   ];
   E.reclamos = (ventas) => {
     const lista = ventas.filter(v => !v.esCabeceraPaquete);
@@ -3357,6 +3531,82 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
       mas: contado > 0 && cuotas > 0 ? contado / cuotas - 1 : null, porDiez: contado > 0 && cuotas > 0 ? Math.ceil(10 * contado / cuotas - 1e-9) : null };
   };
 
+  // ---------- Precio para un margen y ganancia a un precio (2.15.0: las dos calculadoras del detalle) ----------
+  // Con la estructura de costos del producto: comisión, impuestos y cupones (en % del precio), envío y costo por unidad.
+  // precioParaMargen da null si no se puede llegar (comisión + impuestos + cupones + margen se comen el 95 % o más).
+  E.precioParaMargen = (p, m) => {
+    if (!p || p.costoU == null || !isFinite(p.costoU) || m == null || !isFinite(m)) return null;
+    const den = 1 - (p.tasaCom || 0) - (p.tasaImp || 0) - (p.tasaCup || 0) - m;
+    return den > 0.05 ? (p.costoU + (p.envioU || 0)) / den : null;
+  };
+  E.gananciaAPrecio = (p, precio) => {
+    if (!p || p.costoU == null || !isFinite(p.costoU) || !(precio > 0) || !isFinite(precio)) return null;
+    const g = precio * (1 - (p.tasaCom || 0) - (p.tasaImp || 0) - (p.tasaCup || 0)) - (p.envioU || 0) - p.costoU;
+    return { ganancia: g, margen: g / precio };
+  };
+  // ---------- Un producto de la planilla sin ventas en el período (2.15.0) ----------
+  // Para abrir su detalle igual: costo (último pedido o TITULARES), stock, lo que dice la planilla y las calculadoras,
+  // con la comisión, los impuestos y los cupones promedio de TUS ventas del período y el envío por correo más común.
+  E.productoPlanilla = (R, key, dueño) => {
+    if (!R || !R.model || !key) return null;
+    const perfil = R.perfil.id, d0 = dueño || perfil;
+    const f = E.fichaDe(R.model, key, d0);
+    const s = R.stock ? R.stock.filas.find(x => x.key === key) || R.stock.filas.find(x => U.mismoProducto(x.key, key)) : null;
+    if (!f && !s) return null;
+    const k = f ? f.key : key, dueñoF = (f && f.vendedor) || d0;
+    const ref = R.periodo && R.periodo.hasta ? U.addDays(R.periodo.hasta, 1) : new Date();
+    const c = costoParaFecha(R.model, k, ref, dueñoF);
+    const T = R.tasasNuevo;
+    const p = {
+      key: k, nombre: (f && f.nombre) || (s && s.nombre) || key, dueño: dueñoF, esMio: dueñoF === perfil, sinVentas: true,
+      ventas: 0, unidades: 0, facturacion: 0, share: 0, precioProm: null, precioMin: null, precioMax: null,
+      precioUlt: f && f.precioPublicado > 0 ? f.precioPublicado : null, netoU: null, costoU: c.costo, gananciaU: null, ganancia: null, margen: null,
+      costoFuente: c.fuente, tasaCom: T ? T.com : C.PLANILLA_COMISION, tasaImp: T ? T.imp : 0, tasaCup: T ? T.cup : 0,
+      envioU: T && T.correo != null ? T.correo : C.PLANILLA_ENVIO_FIJO, tasasDe: T ? 'periodo' : 'planilla',
+      flex: 0, ads: 0, publi: null, sinCosto: 0, serie: [], porPublicacion: [], cuentas: [], publicaciones: [], ventasLista: [],
+      precioPublicadoPlanilla: f && f.precioPublicado || null, margenPlanilla: f && f.margenPlanilla != null ? f.margenPlanilla : null,
+      precioPY: f && f.precioPY || null, volumen: f && f.volumen || null, linkPY: f && f.linkPY || null,
+      otrosVendedores: U.uniq(E.grupoDe(R.model, k).map(x => x.vendedor).filter(x => x && x !== dueñoF)),
+    };
+    p.precioObjetivo = E.precioParaMargen(p, R.opciones.objetivo);
+    p.precioVerde = E.precioParaMargen(p, R.opciones.verde);
+    p.margenFormula = (p.costoU != null && p.precioPublicadoPlanilla > 0)
+      ? (p.precioPublicadoPlanilla * (1 - C.PLANILLA_COMISION) - C.PLANILLA_ENVIO_FIJO - p.costoU) / p.precioPublicadoPlanilla : null;
+    return p;
+  };
+  // ---------- Un producto que no está ni en la planilla ni en el reporte (2.15.0) ----------
+  // v: { costo, moneda: 'USD' (precio en Paraguay: + recargo de Sergio PY, al dólar de la planilla) | 'ARS', envio, nombre }
+  E.productoManual = (R, v) => {
+    if (!R) return null;
+    v = v || {};
+    const T = R.tasasNuevo, dolar = R.model && R.model.dolar > 0 ? R.model.dolar : null;
+    const n = x => (x == null || !/\d/.test(String(x)) ? null : U.num(x)); // vacío o sin números: sin dato
+    const c = n(v.costo), e = n(v.envio);
+    const usd = v.moneda !== 'ARS' && !!dolar;
+    const okC = c != null && isFinite(c) && c >= 0;
+    const p = {
+      key: '', nombre: String(v.nombre || '').trim() || 'Producto nuevo', manual: true, sinVentas: true, esMio: true, dueño: R.perfil.id,
+      costoU: okC ? (usd ? c * (1 + C.RECARGO_SERGIO_PY) * dolar : c) : null, costoUSD: usd && okC ? c : null, dolar,
+      tasaCom: T ? T.com : C.PLANILLA_COMISION, tasaImp: T ? T.imp : 0, tasaCup: T ? T.cup : 0,
+      envioU: e != null && isFinite(e) && e >= 0 ? e : (T && T.correo != null ? T.correo : C.PLANILLA_ENVIO_FIJO), tasasDe: T ? 'periodo' : 'planilla',
+      precioProm: null, precioPublicadoPlanilla: null,
+    };
+    p.precioObjetivo = E.precioParaMargen(p, R.opciones.objetivo);
+    return p;
+  };
+  // Los productos tuyos de la planilla que no tuvieron ventas en el período (para buscarlos y abrirlos)
+  E.productosSinVentas = (R) => {
+    if (!R || !R.model) return [];
+    const con = new Set(R.productos.map(p => p.key + '|' + p.dueño));
+    const vistos = new Set(), out = [];
+    for (const f of E.indice(R.model).fichas) {
+      if (!f || f.vendedor !== R.perfil.id || con.has(f.key + '|' + f.vendedor) || vistos.has(f.key)) continue;
+      vistos.add(f.key); out.push({ key: f.key, nombre: f.nombre, dueño: f.vendedor });
+    }
+    if (R.stock) for (const s of R.stock.filas) if (!s.vendidas && !vistos.has(s.key) && !con.has(s.key + '|' + R.perfil.id)) { vistos.add(s.key); out.push({ key: s.key, nombre: s.nombre, dueño: R.perfil.id }); }
+    return out.sort((a, b) => a.nombre.localeCompare(b.nombre));
+  };
+
   E.productos = (validas, model, perfil, op, desde, hasta, dias) => {
     const out = [];
     const grupos = U.groupBy(validas.filter(v => v.producto), v => v.producto + '|' + v.dueño);
@@ -3371,7 +3621,7 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
       const costoU = uC ? U.sum(conCosto, v => v.costoU * v.unidades) / uC : null;
       const ganancia = conCosto.length ? U.sum(conCosto, v => v.ganancia) : null;
       const factC = U.sum(conCosto, v => v.ingresos);
-      const margen = (ganancia != null && factC) ? ganancia / factC : null;
+      const margen = (ganancia != null && factC > 0) ? ganancia / factC : null;
       // Estructura de costos por unidad para el precio sugerido
       const ing = fact || 1;
       const tasaCom = -U.sum(arr, v => v.cargo + v.costoFijo + v.costoCuotas) / ing;
@@ -3388,7 +3638,7 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
       const ult = ordenadas[ordenadas.length - 1];
       const serie = [];
       if (desde) { for (let i = 0; i < dias; i++) serie.push(0); for (const v of arr) if (v.fecha) { const k = U.daysBetween(desde, v.fecha); if (k >= 0 && k < dias) serie[k] += v.unidades; } }
-      const p = model.productos.get(v0.producto) || {};
+      const p = E.fichaDe(model, v0.producto, v0.dueño) || {};
       // Publicidad (2.11.0, R2-A): las ventas que el Excel marca «Venta por publicidad» contra las demás.
       // La ganancia es antes de pagar los anuncios: el Excel de ventas no trae ese gasto.
       const conAds = arr.filter(v => v.ads);
@@ -3409,6 +3659,7 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
         precioPY: p.precioPY || null, volumen: p.volumen || null, linkPY: p.linkPY || null,
         cuentas: U.uniq(arr.map(v => v.cuenta)), publicaciones: U.uniq(arr.map(v => v.titulo)),
         ventasLista: ordenadas,
+        otrosVendedores: v0.dueñoVarios ? v0.dueñoVarios.filter(x => x !== v0.dueño) : [], // 2.15.0
       });
     }
     out.sort((a, b) => (b.ganancia || 0) - (a.ganancia || 0) || b.unidades - a.unidades);
@@ -3532,6 +3783,15 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
     if (t.evento) { const e = t.evento(y); return { id: t.id, nombre: t.nombre, inicio: e.inicio, fin: U.addDays(e.inicio, e.dias - 1), dias: e.dias, dia: e.inicio, aprox: !!e.aprox, evento: true }; }
     const d = t.dia(y), inicio = U.addDays(d, -t.antes), fin = U.addDays(d, -t.hasta);
     return { id: t.id, nombre: t.nombre, inicio, fin, dias: U.daysBetween(inicio, fin) + 1, dia: d, aprox: false, evento: false };
+  };
+  // 2.15.0: ¿ese día cae en una fecha fuerte? (para la venta de días normales del pedido y de los meses guardados)
+  const FUERTES = new Map();
+  E.esFechaFuerte = (d) => {
+    if (!(d instanceof Date) || isNaN(d)) return false;
+    const y = d.getFullYear();
+    if (!FUERTES.has(y)) { const ocs = []; for (const yy of [y - 1, y]) for (const t of E.FECHAS) ocs.push(E.ocurrencia(t, yy)); FUERTES.set(y, ocs); }
+    const x = U.startOfDay(d);
+    return FUERTES.get(y).some(o => x >= o.inicio && x <= o.fin);
   };
   // Para cada fecha fuerte que entra entera en lo cargado: unidades por día en la fecha contra los días normales
   // de antes (hasta 28, sin otras fechas fuertes). De cada tipo, la última; y la próxima, contando desde el
@@ -3766,27 +4026,87 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
   };
 
   // ============================================================
-  E.stock = (model, validas, perfil, op, dias, incluidas) => {
+  // ---------- Venta diaria ponderada (2.15.0) ----------
+  // Para cada producto tuyo: unidades por día con todo lo que hay cargado: los días del reporte (uno por uno) y los
+  // meses guardados en «Mes a mes» de este perfil y estas cuentas, anteriores al reporte (un renglón por mes). Cada día
+  // pesa 0,5^(antigüedad ÷ vida media): con 60 días, uno de hace 60 días pesa la mitad que el último y uno de hace 120,
+  // un cuarto. Los días de las fechas fuertes no cuentan (salvo que el reporte sea casi todo fecha fuerte).
+  // dia(k) = Σ peso × unidades ÷ Σ peso de los días con datos (también los días sin ventas de ese producto).
+  E.ventaPonderada = ({ validas, perfil, desde, hasta, dias, cuentas, historial, vidaMedia }) => {
+    const H = vidaMedia || C.PEDIDO_VIDA_MEDIA_DIAS, w = a => Math.pow(0.5, Math.max(0, a) / H);
+    const d0 = U.startOfDay(desde), h0 = U.startOfDay(hasta);
+    // Días de fechas fuertes dentro del reporte
+    const fuera = new Set(); for (let i = 0; i < dias; i++) { const d = U.addDays(d0, i); if (E.esFechaFuerte(d)) fuera.add(U.dayKey(d)); }
+    const sinFechas = fuera.size && dias - fuera.size >= 7 ? fuera.size : 0;
+    if (!sinFechas) fuera.clear();
+    let peso = 0, diasDatos = 0;
+    for (let i = 0; i < dias; i++) { const d = U.addDays(d0, i); if (fuera.has(U.dayKey(d))) continue; peso += w(U.daysBetween(d, h0)); diasDatos++; }
+    const u = new Map(), diasReporte = diasDatos;
+    for (const v of validas) {
+      if (!v.esMia || !v.producto || !v.fecha) continue;
+      const d = U.startOfDay(v.fecha); if (d < d0 || d > h0 || fuera.has(U.dayKey(d))) continue;
+      u.set(v.producto, (u.get(v.producto) || 0) + w(U.daysBetween(d, h0)) * v.unidades);
+    }
+    // Meses guardados en esta compu, anteriores al reporte
+    let lista = [];
+    try { lista = historial || (RV.historial ? RV.historial.lista(perfil.id, cuentas) : []); } catch (e) { lista = []; }
+    if (!RV.historial) lista = [];
+    const dk0 = U.dayKey(d0), tope = U.addDays(d0, -C.PEDIDO_HISTORIA_MAX_DIAS);
+    const meses = (lista || []).filter(e => e && Array.isArray(e.prods) && e.desde && e.hasta && e.dias > 0 && e.hasta < dk0 && RV.historial.fecha(e.desde) >= tope);
+    let desdeDatos = d0;
+    for (const e of meses) {
+      const ed = RV.historial.fecha(e.desde), mid = U.addDays(ed, (e.dias - 1) / 2);
+      const pm = w(U.daysBetween(mid, h0) + ((e.dias - 1) / 2) % 1);
+      // desde la 2.15.0 cada mes guarda también lo vendido en días normales (un) y cuántos fueron (dn)
+      const normales = e.dn >= 7 && e.dn < e.dias;
+      const dd = normales ? e.dn : e.dias;
+      peso += pm * dd; diasDatos += e.dias;
+      if (ed < desdeDatos) desdeDatos = ed;
+      for (const p of e.prods) {
+        const uu = p && (normales && p.un != null ? p.un : p.u);
+        if (!p || p.d !== perfil.id || !(uu > 0)) continue;
+        // la clave guardada puede estar escrita apenas distinto (o venir de antes de la 2.15.0)
+        const k = u.has(p.k) ? p.k : ([...u.keys()].find(x => U.mismoProducto(x, p.k)) || p.k);
+        u.set(k, (u.get(k) || 0) + pm * uu);
+      }
+    }
+    const porDia = new Map(); for (const [k, x] of u) porDia.set(k, peso > 0 ? x / peso : 0);
+    const dia = k => { if (porDia.has(k)) return porDia.get(k); for (const [x, val] of porDia) if (U.mismoProducto(x, k)) return val; return 0; };
+    return { dia, porDia, peso, diasDatos, diasReporte, meses: meses.length, desdeDatos, sinFechas, vidaMedia: H };
+  };
+
+  E.stock = (model, validas, perfil, op, dias, incluidas, pond) => {
     if (!model.stock) return null;
     const cuentasFuera = incluidas ? perfil.cuentas.filter(c => !incluidas.includes(c)) : [];
+    // 2.15.0: solo tus ventas (lo vendido de otro dueño sale de su stock) y todas las filas de la hoja de stock:
+    // el mismo producto puede estar para dos vendedores. Cada fila toma la clave de tu fila de TITULARES.
     const vendidas = new Map();
-    for (const v of validas) if (v.producto) vendidas.set(v.producto, (vendidas.get(v.producto) || 0) + v.unidades);
+    for (const v of validas) if (v.producto && v.esMia) vendidas.set(v.producto, (vendidas.get(v.producto) || 0) + v.unidades);
     const filas = [];
-    const claves = new Set();
-    for (const [k, it] of model.stock) {
-      const p = model.productos.get(k) || {};
-      const dueño = it.vendedor || p.vendedor;
+    const claves = new Map(); // clave del producto -> fila de la hoja de stock (o null)
+    for (const it of (model.stockLista || [...model.stock.values()])) {
+      if (!it || !it.producto) continue;
+      let dueño = it.vendedor;
+      if (!dueño) { const vs = U.uniq(E.grupoDe(model, it.producto).map(f => f.vendedor).filter(Boolean)); dueño = vs.includes(perfil.id) ? perfil.id : vs[0]; }
       if (dueño !== perfil.id) continue;
-      claves.add(k);
+      const f = E.fichaDe(model, it.producto, perfil.id);
+      const k = f && U.mismoProducto(f.key, it.producto) ? f.key : it.producto;
+      if (!claves.has(k)) claves.set(k, it);
     }
     // también productos tuyos vendidos que no están en la hoja de stock
-    for (const v of validas) if (v.esMia && v.producto && !model.stock.has(v.producto)) claves.add(v.producto);
-    for (const k of claves) {
-      const it = model.stock.get(k) || null;
-      const p = model.productos.get(k) || {};
+    for (const v of validas) if (v.esMia && v.producto && !claves.has(v.producto)) claves.set(v.producto, null);
+    for (const [k, it] of claves) {
+      const p = E.fichaDe(model, k, perfil.id) || {};
       const total = it ? (it.total != null ? it.total : (it.fisico || 0) + (it.camino || 0)) : null;
       const u = vendidas.get(k) || 0;
-      const vDia = dias ? u / dias : 0;
+      const vSimple = dias ? u / dias : 0;
+      // 2.15.0: la venta ponderada (todo lo cargado, lo reciente pesa más); con menos de 30 días de datos, lo que
+      // falta se completa con la venta mensual de la planilla
+      const plDia = it && it.ventaMensualPlanilla > 0 ? it.ventaMensualPlanilla / 30 : null;
+      let vDia = pond ? pond.dia(k) : vSimple, completada = false;
+      if (pond && plDia != null && pond.diasDatos < C.PEDIDO_DIAS_MIN) {
+        vDia = (pond.diasDatos * vDia + (C.PEDIDO_DIAS_MIN - pond.diasDatos) * plDia) / C.PEDIDO_DIAS_MIN; completada = true;
+      }
       const cobertura = (total != null && vDia > 0) ? total / vDia : null;
       let estado;
       if (total == null) estado = 'SIN DATO';
@@ -3803,6 +4123,7 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
       filas.push({
         key: k, nombre: (it && it.nombre) || p.nombre || k, fisico: it ? it.fisico : null, camino: it ? it.camino : null, total,
         rotos: it ? it.rotos : null, vendidas: u, ventaDia: vDia, ventaMesReal: vDia * 30, ventaMesPlanilla: it ? it.ventaMensualPlanilla : null,
+        ventaDiaSimple: vSimple, completadaPlanilla: completada,
         cobertura, estado, estadoPlanilla: it ? it.estadoPlanilla : (p.estadoStock || null), costoUSDu,
         aComprarPlanilla: it && it.aComprarPlanilla > 0 ? it.aComprarPlanilla : null, // «Cantidad a Comprar» de Consulta stock (referencia)
         valorARS: (total != null && p.costo != null) ? Math.max(0, total) * p.costo : null,
@@ -3976,6 +4297,11 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
       if (edad > 12 * 3600000) A.push({ nivel: edad > 3 * 86400000 ? 'atencion' : 'info', id: 'planillavieja', titulo: 'Planilla de una copia guardada',
         detalle: `Se usó la copia de ANALISIS DE PRODUCTOS guardada en este navegador (leída ${U.relTime(R.model.leidaEn || R.model.fetchedAt)}). Si cambiaron costos o stock, conectala en vivo o subí la planilla de nuevo.` });
     }
+    // Filas raras apartadas (2.15.0): reclamos con la plata devuelta y ajustes, fuera del margen
+    const raras = R.ventas.filter(v => v.rara && !v.esCabeceraPaquete);
+    if (raras.length) N.push({ nivel: 'atencion', id: 'apartadas', titulo: `${U.plural(raras.length, 'venta', 'ventas')} con la plata devuelta o sin unidades`,
+      detalle: `No entran en la facturación, la ganancia ni el margen de cada producto (si entraran, ${raras.length === 1 ? 'esa venta hundiría' : 'esas ventas hundirían'} el margen). Lo que dejaron o se llevaron (${U.fmtMoneySigned(U.sum(raras, v => v.total - v.flex))}) está en «Devoluciones, cancelaciones y reclamos». Revisalas en Mercado Libre.`,
+      items: raras.map(v => ({ titulo: v.productoNombre || v.titulo || 'Sin título', extra: `venta ${v.id} · ${v.rara}${v.estado ? ' · ' + v.estado : ''}${R.cuentas.length > 1 ? ' · ' + v.cuenta : ''}` })) });
     // Reclamos abiertos (2.9.0, R14)
     const abiertos = R.reclamos ? R.reclamos.abiertos : [];
     if (abiertos.length) N.push({ nivel: 'atencion', id: 'reclamos', titulo: U.plural(abiertos.length, 'reclamo abierto', 'reclamos abiertos'),
@@ -4066,16 +4392,17 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
     return o;
   };
 
-  // Texto del balance: 0 = solo el reporte, 1 = solo la planilla
-  PD.pesoTxt = (p) => p >= 0.999 ? 'solo la planilla' : p <= 0.001 ? 'solo el reporte' : Math.abs(p - 0.5) < 0.001 ? 'mitad planilla, mitad reporte'
-    : `${U.fmtPct(p, 0)} planilla y ${U.fmtPct(1 - p, 0)} reporte`;
+  // Texto del balance: 0 = solo tus ventas (2.15.0: todo lo cargado, ponderado), 1 = solo la planilla
+  PD.pesoTxt = (p) => p >= 0.999 ? 'solo la planilla' : p <= 0.001 ? 'solo tus ventas' : Math.abs(p - 0.5) < 0.001 ? 'mitad planilla, mitad tus ventas'
+    : `${U.fmtPct(p, 0)} planilla y ${U.fmtPct(1 - p, 0)} tus ventas`;
 
   // Venta mensual a usar para un producto
   PD.demanda = (f, peso) => {
     const pl = f.ventaMesPlanilla > 0 ? f.ventaMesPlanilla : null; // 0 o vacío en la planilla = sin dato
     const re = Math.max(0, f.ventaMesReal || 0);
-    if (pl == null) return { mes: re, fuente: re > 0 ? 'reporte' : 'ninguna', nota: re > 0 && f.ventaMesPlanilla != null ? 'la planilla dice 0 por mes: se usa solo el reporte' : re > 0 ? 'sin venta mensual en la planilla: se usa solo el reporte' : '' };
-    if (!f.vendidas && !(f.total > 0)) return { mes: pl, fuente: 'planilla', nota: 'sin stock y sin ventas en el período: se usa solo la planilla' };
+    if (pl == null) return { mes: re, fuente: re > 0 ? 'reporte' : 'ninguna', nota: re > 0 && f.ventaMesPlanilla != null ? 'la planilla dice 0 por mes: se usan solo tus ventas' : re > 0 ? 'sin venta mensual en la planilla: se usan solo tus ventas' : '' };
+    // 2.15.0: «sin ventas» mira todo lo cargado (el reporte y los meses guardados), no solo el reporte
+    if (!(re > 0) && !f.vendidas && !(f.total > 0)) return { mes: pl, fuente: 'planilla', nota: 'sin stock y sin ventas en lo cargado: se usa solo la planilla' };
     return { mes: peso * pl + (1 - peso) * re, fuente: 'balance', nota: '' };
   };
 
@@ -4189,7 +4516,7 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
     if (!res || !res.conPedido.length) return '';
     const o = res.opciones, S = R.stock;
     const L = [`*Pedido ${PD.MODOS[o.modo].corto} — ${R.perfil.nombre}*`,
-      `Para ${o.dias} días · venta mensual: ${PD.pesoTxt(o.peso)} · según lo vendido entre el ${U.fmtDate(S && S.ventana ? S.ventana.desde : R.periodo.desde)} y el ${U.fmtDate(R.periodo.hasta)}${S && S.ultimaAct ? ` · stock de la planilla al ${S.ultimaAct}` : ''}`];
+      `Para ${o.dias} días · venta mensual: ${PD.pesoTxt(o.peso)} · según lo vendido entre el ${U.fmtDate(S && S.pond ? S.pond.desde : S && S.ventana ? S.ventana.desde : R.periodo.desde)} y el ${U.fmtDate(R.periodo.hasta)}${S && S.pond ? ' (lo reciente pesa más)' : ''}${S && S.ultimaAct ? ` · stock de la planilla al ${S.ultimaAct}` : ''}`];
     if (o.modo === 'tope' && res.topeUSD != null) L.push(`Tope: ${U.fmtUSD(res.topeUSD)}${o.moneda === 'ARS' ? ` (${U.fmtMoney(o.tope)})` : ''}`);
     if (o.fechas && res.fechas.length && res.extraFechas) L.push(`Con las fechas fuertes: ${res.fechas.map(t => t.nombre).join(', ')} (+${U.plural(res.extraFechas, 'unidad', 'unidades')})`);
     L.push('');
@@ -5452,6 +5779,7 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
             <tfoot><tr><td>${U.plural(lista.length, 'producto', 'productos')}</td><td>${U.fmtInt(tot.u)}</td><td>${$(tot.u ? tot.f / tot.u : null)}</td><td class="hide-md"></td><td class="hide-md"></td><td></td><td>${factC ? RV.render.pillMargen(tot.g / factC, op) : ''}</td><td>${$(tot.g)}</td>${stock ? '<td></td>' : ''}</tr></tfoot>
           </table></div><div class="pcards can-swap">${cards}</div>
           <p class="nota" style="margin-top:.875rem">${esc(R_.semaforoTxt(op))}<span class="hide-tab"> La raya en cada barrita es el objetivo, ${pct(op.objetivo, 0)}.</span></p>` : `<p class="muted">No hay productos para mostrar${q ? ' con esa búsqueda' : ''}.</p>`}
+          ${R_.sinVentasBusqueda(R, q, scope)}
         </div>
         <div class="card span-7">
           <div class="card-h"><div><h3>Demanda contra margen</h3><div class="sub">Cada círculo es un producto tuyo; el tamaño es la ganancia. Arriba a la derecha, los que conviene empujar.</div></div></div>
@@ -5466,6 +5794,45 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
         ${R_.masProductos(R, st)}
       </div>
     </section>`;
+  };
+
+  // 2.15.0: al buscar, también los productos tuyos de la planilla que no tuvieron ventas (se abren igual)
+  R_.sinVentasBusqueda = (R, q, scope) => {
+    if (!q || scope === 'terceros') return '';
+    const xs = RV.engine.productosSinVentas(R).filter(x => U.normPlain(x.nombre).includes(q)).slice(0, 12);
+    const nuevo = `<button type="button" class="btn btn-sm" data-action="producto-nuevo">Calcular uno que no está en ningún lado</button>`;
+    if (!xs.length) return `<div class="sin-ventas" id="sin-ventas"><p class="small muted">¿Es un perfume que no está en tu planilla ni en este reporte? ${nuevo}</p></div>`;
+    return `<div class="sin-ventas" id="sin-ventas"><h3 class="mp-h">En tu planilla, sin ventas en este reporte</h3>
+      <div class="sv-lista">${xs.map(x => `<button type="button" class="btn btn-sm" data-action="producto" data-key="${esc(x.key)}" data-dueno="${esc(x.dueño)}">${esc(x.nombre)}</button>`).join('')}</div>
+      <p class="small muted">Tocá uno para ver su costo, su stock y a qué precio venderlo. ¿No está? ${nuevo}</p></div>`;
+  };
+  // 2.15.0: ventana lateral para un producto que no está ni en la planilla ni en el reporte (no se guarda en ningún lado)
+  R_.nuevoCostoTxt = (p) => p.costoUSD != null && p.dolar ? `Costo ${$(p.costoU)} = US$${U.fmtDec(p.costoUSD, 2)} + ${pct(C.RECARGO_SERGIO_PY, 0)} de Sergio PY, al dólar de la planilla (${$(p.dolar)}).`
+    : p.costoU != null ? `Costo ${$(p.costoU)} por unidad.` : 'Poné el costo para ver a qué precio venderlo.';
+  R_.drawerNuevo = (R, v) => {
+    const op = R.opciones, T = R.tasasNuevo, dolar = R.model && R.model.dolar > 0 ? R.model.dolar : null;
+    v = v || {};
+    const p = RV.engine.productoManual(R, v);
+    const val = x => (x == null || x === '' ? '' : esc(String(x)));
+    const usd = v.moneda !== 'ARS' && !!dolar;
+    return `<div class="drawer-h"><div><div class="small muted">No está en la planilla ni en este reporte</div><h3 id="drawer-title">${esc(p.nombre)}</h3></div>
+      <button class="icon-btn" type="button" data-action="cerrar-drawer" aria-label="Cerrar">${icon('i-x')}</button></div>
+      <div class="drawer-b" tabindex="0">
+        <div class="cn-f pn-f" role="group" aria-label="Datos del producto">
+          <label class="ped-f"><span>Nombre (opcional)</span><input class="field" type="text" id="pn-nombre" maxlength="80" value="${val(v.nombre)}" placeholder="por ejemplo, Azzaro Wanted 100 ml"></label>
+          <label class="ped-f"><span>Costo por unidad</span><input class="field" type="number" id="pn-costo" inputmode="decimal" min="0" step="any" value="${val(v.costo)}" placeholder="${usd ? 'por ejemplo, 45' : 'por ejemplo, 80000'}"></label>
+          <label class="ped-f"><span>El costo está en</span><select class="field" id="pn-moneda">${dolar ? `<option value="USD"${usd ? ' selected' : ''}>US$ (Paraguay)</option>` : ''}<option value="ARS"${usd ? '' : ' selected'}>Pesos</option></select></label>
+          <label class="ped-f"><span>Envío por unidad</span><input class="field" type="number" id="pn-envio" inputmode="numeric" min="0" step="10" value="${val(v.envio != null && v.envio !== '' ? v.envio : Math.round(p.envioU))}"></label>
+        </div>
+        <p class="small muted" id="pn-costo-txt" aria-live="polite">${esc(R_.nuevoCostoTxt(p))}</p>
+        <div class="calc">
+          <label for="calc-precio">¿Y si lo vendés a…?</label>
+          <div class="calc-row"><input id="calc-precio" type="number" inputmode="numeric" step="100" min="0" value="${val(v.precio)}" placeholder="precio"><div class="calc-out" id="calc-out" aria-live="polite"></div></div>
+          <label for="calc-margen">¿Qué margen querés?</label>
+          <div class="calc-row"><span class="calc-pct"><input id="calc-margen" type="number" inputmode="decimal" step="1" min="0" max="90" value="${val(v.margen != null ? v.margen : Math.round(op.objetivo * 100))}"><span aria-hidden="true">%</span></span><div class="calc-out" id="calc-margen-out" aria-live="polite"></div></div>
+          <div class="small">Con ${T ? `los porcentajes de tus ${U.fmtInt(T.ventas)} ventas de este período` : 'los de la fórmula de la planilla'}: comisión ${pct(p.tasaCom)}, impuestos ${pct(p.tasaImp)} y cupones ${pct(p.tasaCup)}. Es aproximado: la comisión de Meli cambia según la categoría y el precio. No se guarda en la planilla ni en ningún lado.</div>
+        </div>
+      </div>`;
   };
 
   // ---------- Más sobre tus productos (2.10.0): lo que más te deja (R3) y la calculadora para uno nuevo (R4) ----------
@@ -5503,9 +5870,20 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
   };
 
   // ---------- Stock ----------
+  // 2.15.0: de dónde sale la venta diaria del stock y del pedido (todo lo cargado, lo reciente pesa más)
+  R_.ritmoTxt = (S) => {
+    const p = S && S.pond;
+    if (!p) return S && S.ventana ? `de los últimos ${S.ventana.dias} días` : 'de este período';
+    // con fechas fuertes en el reporte, los días que se cuentan son los que quedan sin ellas
+    const sinF = p.sinFechas && !p.meses ? `, sin contar ${U.plural(p.sinFechas, 'día', 'días')} de fechas fuertes` : '';
+    let t = `de tus ventas desde el ${U.fmtDate(p.desde)} (${U.plural(p.diasDatos, 'día', 'días')}${sinF}${p.meses ? `: este reporte y ${U.plural(p.meses, 'mes guardado', 'meses guardados')} en esta compu` : ''}), con más peso lo más reciente`;
+    if (p.sinFechas && p.meses) t += ' y sin los días de fechas fuertes';
+    if (S.filas && S.filas.some(f => f.completadaPlanilla)) t += `. Como son menos de ${C.PEDIDO_DIAS_MIN} días${p.sinFechas ? ' sin fechas fuertes' : ''}, lo que falta se completa con la venta mensual de la planilla`;
+    return t;
+  };
   R_.stock = (R, st) => {
     const S = R.stock;
-    const ritmo = R.stock && R.stock.ventana ? `de los últimos ${R.stock.ventana.dias} días` : 'de este período';
+    const ritmo = S && S.pond ? 'de tus ventas (lo más reciente pesa más)' : R.stock && R.stock.ventana ? `de los últimos ${R.stock.ventana.dias} días` : 'de este período';
     const head = `<div class="section-h"><div><h2 id="h-stock">Stock y reposición</h2><p>Cuántos días te dura cada producto al ritmo de venta ${ritmo}, y cómo armar el pedido.</p></div></div>`;
     const reponer = S ? S.filas.filter(f => f.estado === 'SIN STOCK' || f.estado === 'PEDIR YA') : [];
     const nombresRep = reponer.slice(0, 3).map(f => f.nombre + (f.estado === 'SIN STOCK' ? ', sin stock' : f.cobertura != null ? `, que te alcanza para ${U.plural(Math.max(0, Math.round(f.cobertura)), 'día', 'días')}` : ''));
@@ -5532,13 +5910,13 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
     const maxCob = 45;
     const venta = (f) => {
       const pl = f.ventaMesPlanilla > 0 ? `${U.fmtDec(f.ventaMesPlanilla, 0)}/mes` : 'sin dato';
-      return `planilla: ${pl} · reporte: ${U.fmtDec(f.ventaMesReal, 0)}/mes`;
+      return `planilla: ${pl} · tus ventas: ${U.fmtDec(f.ventaMesReal, 0)}/mes`;
     };
     const rows = S.filas.map(f => {
       const cob = f.cobertura;
       const w = cob == null ? 0 : U.clamp(cob / maxCob, 0, 1) * 100;
       const tone = f.estado === 'OK' ? '' : f.estado === 'REVISAR' ? 'warn' : 'crit';
-      return `<tr class="${f.vendidas ? 'is-link' : ''}" ${f.vendidas ? `data-action="producto" data-key="${esc(f.key)}" tabindex="0"` : ''}>
+      return `<tr class="is-link" data-action="producto" data-key="${esc(f.key)}" data-dueno="${esc(R.perfil.id)}" tabindex="0">
         <td class="t-name"><div class="t-name-main">${esc(f.nombre)}</div><div class="small muted">${esc(venta(f))}</div><div class="only-sm">${pillStock(f.estado)}</div></td>
         <td>${f.total != null ? U.fmtInt(f.total) : '—'}${f.camino ? `<div class="small muted">${U.fmtInt(f.camino)} en camino</div>` : ''}</td>
         <td class="hide-sm">${U.fmtInt(f.vendidas)}</td>
@@ -5551,7 +5929,7 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
       <div class="stats" style="margin-bottom:1rem">${tiles.map(t => `<div class="stat ${t.cls || ''}"><div class="stat-l">${esc(t.l)}</div><div class="stat-v">${esc(t.v)}</div><div class="stat-s">${esc(t.s)}</div></div>`).join('')}
         <div class="stat is-link" data-go="pedido" id="ped-tile" role="link" tabindex="0" title="Ir a «Armá el pedido»">${R_.pedidoTile(res)}</div></div>
       <div class="card">
-        <div class="card-h"><div><h3>Cuánto te alcanza cada producto</h3><div class="sub">Cobertura = stock ÷ venta diaria ${S.ventana ? `de los últimos ${S.ventana.dias} días (del ${esc(U.fmtDate(S.ventana.desde))} al ${esc(U.fmtDate(S.ventana.hasta))}), porque el reporte es de varios meses` : 'del período (lo que da este reporte)'}.<span class="only-lg"> La barra va de 0 a ${maxCob} días: la raya roja marca ${U.fmtDec(C.STOCK_PEDIR_YA_DIAS, 1)} días y la otra, ${C.STOCK_REVISAR_DIAS} (mismo criterio que «Consulta stock»).</span></div></div></div>
+        <div class="card-h"><div><h3>Cuánto te alcanza cada producto</h3><div class="sub">Cobertura = stock ÷ venta diaria ${esc(R_.ritmoTxt(S))}.${S.ventana ? ` «Vendidas» son las de los últimos ${S.ventana.dias} días (del ${esc(U.fmtDate(S.ventana.desde))} al ${esc(U.fmtDate(S.ventana.hasta))}).` : ''}<span class="only-lg"> La barra va de 0 a ${maxCob} días: la raya roja marca ${U.fmtDec(C.STOCK_PEDIR_YA_DIAS, 1)} días y la otra, ${C.STOCK_REVISAR_DIAS} (mismo criterio que «Consulta stock»).</span></div></div></div>
         ${S.cuentasFuera && S.cuentasFuera.length ? `<p class="note-warn">${icon('i-alert')}<span>La venta diaria sale solo de las cuentas de este reporte. Si también vendés estos productos en ${esc(RV.app.listaY(S.cuentasFuera))}, la cobertura real es menor: sumá esas cuentas para verla completa.</span></p>` : ''}
         <div class="tbl-wrap" tabindex="0" role="region" aria-label="Tabla de cobertura de stock"><table class="tbl"><thead><tr><th>Producto</th><th>Stock</th><th class="hide-sm">Vendidas</th><th class="hide-md">Por semana</th><th>Cobertura</th><th class="hide-sm">Estado</th></tr></thead><tbody>${rows}</tbody></table></div>
       </div>
@@ -5574,12 +5952,12 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
       return `<button type="button" data-action="ped-modo" data-k="${k}" id="ped-m-${k}" aria-pressed="${o.modo === k}"><b>${esc(M.nombre)}</b><span class="ped-m-sub">${esc(sub)}</span></button>`;
     };
     return `<div class="card ped" id="pedido">
-      <div class="card-h"><div><h3>Armá el pedido</h3><div class="sub">La venta mensual de cada producto sale de un balance entre la de la planilla («Consulta stock») y la de este reporte. Elegí cómo lo querés armar.</div></div></div>
+      <div class="card-h"><div><h3>Armá el pedido</h3><div class="sub">La venta mensual de cada producto sale de un balance entre la de la planilla («Consulta stock») y la de tus ventas (todo lo cargado, con más peso lo más reciente). Elegí cómo lo querés armar.</div></div></div>
       <div class="segc ped-modos" role="group" aria-label="Tipo de pedido">${RV.pedido.ORDEN_MODOS.map(boton).join('')}</div>
       <p class="ped-desc" id="ped-desc">${esc(RV.pedido.descripcion(o, res.diasMin))}</p>
       <div class="ped-fields">
         <label class="ped-f ped-peso"><span>Venta mensual a usar</span>
-          <span class="ped-range"><span class="small muted">Reporte</span><input type="range" id="ped-peso" min="0" max="100" step="10" value="${Math.round(o.peso * 100)}" aria-describedby="ped-peso-txt"><span class="small muted">Planilla</span></span>
+          <span class="ped-range"><span class="small muted">Tus ventas</span><input type="range" id="ped-peso" min="0" max="100" step="10" value="${Math.round(o.peso * 100)}" aria-describedby="ped-peso-txt"><span class="small muted">Planilla</span></span>
           <span class="small" id="ped-peso-txt">${esc(RV.pedido.pesoTxt(o.peso))}</span></label>
         <label class="ped-f ped-dias"><span>Días a cubrir</span><input class="field" type="number" id="ped-dias" inputmode="numeric" min="7" max="180" step="1" value="${o.dias}"></label>
         <div class="ped-f ped-fechas"><span>Fechas fuertes</span>
@@ -5596,8 +5974,8 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
     const o = res.opciones;
     if (res.faltaTope) return `<div class="ok-box ped-vacio">${icon('i-info')}Cargá arriba cuánto querés gastar como máximo y la página arma el mejor pedido posible con esa plata.${!res.dolar && o.moneda === 'ARS' ? ' (Sin dólar en la planilla, el tope va en US$.)' : ''}</div>`;
     const cobTxt = c => c == null ? '—' : c > 365 ? '+1 año' : U.fmtDec(c, 0) + ' d';
-    const ventaTxt = l => l.fuente === 'balance' ? `planilla ${U.fmtDec(l.mesPlanilla, 0)} · reporte ${U.fmtDec(l.mesReporte, 0)}` : l.fuente === 'planilla' ? 'solo planilla' : l.fuente === 'reporte' ? 'solo reporte' : 'sin ventas';
-    const fila = (l) => `<tr class="${l.qty ? '' : 'is-dim'}">
+    const ventaTxt = l => l.fuente === 'balance' ? `planilla ${U.fmtDec(l.mesPlanilla, 0)} · tus ventas ${U.fmtDec(l.mesReporte, 0)}` : l.fuente === 'planilla' ? 'solo planilla' : l.fuente === 'reporte' ? 'solo tus ventas' : 'sin ventas';
+    const fila = (l) => `<tr class="is-link${l.qty ? '' : ' is-dim'}" data-action="producto" data-key="${esc(l.key)}" data-dueno="${esc(R.perfil.id)}" tabindex="0">
         <td class="t-name"><div class="t-name-main">${esc(l.nombre)}</div>${(() => {
           const n = [l.nota, l.extraFechas ? `+${U.plural(l.extraFechas, 'unidad', 'unidades')} por las fechas fuertes` : '', l.faltaOptimo ? (l.qty ? `faltan ${U.plural(l.faltaOptimo, 'unidad', 'unidades')} para el óptimo` : `no entró en el tope (el óptimo pedía ${U.plural(l.faltaOptimo, 'unidad', 'unidades')})`) : ''].filter(Boolean);
           return n.length ? `<div class="small muted">${esc(n.join(' · '))}</div>` : ''; })()}</td>
@@ -5623,6 +6001,10 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
       }[res.alcanza] || '');
     }
     if (o.fechas && R.fechas) msgs.push(res.fechas.length ? `Suma ${esc(RV.app.listaY(res.fechas.map(t => `${t.nombre} (en ${U.plural(t.faltan, 'día', 'días')})`)))}: ${res.extraFechas ? `+${U.plural(res.extraFechas, 'unidad', 'unidades')} por lo que vendiste de más la última vez` : 'con el stock de hoy no hace falta pedir de más'}.` : `Ninguna fecha fuerte empieza en los próximos ${o.dias} días.`);
+    else if (R.fechas) { // 2.15.0: la venta de base no cuenta los días de fechas fuertes, así que se avisa cuando se viene una
+      const prox = R.fechas.tipos.filter(t => t.proxima && t.faltan != null && t.faltan <= o.dias);
+      if (prox.length) msgs.push(`Se viene ${esc(RV.app.listaY(prox.map(t => `${t.nombre} (en ${U.plural(t.faltan, 'día', 'días')})`)))}. La venta de base no cuenta las fechas fuertes: para sumar lo que vendiste de más la última vez, marcá «Sumar las fechas fuertes».`);
+    }
     if (res.cortos.length && res.conPedido.length) msgs.push(`${U.plural(res.cortos.length, 'producto queda', 'productos quedan')} con menos de ${res.diasMin} días después del pedido.`);
     if (res.sinCosto.length) msgs.push(`${U.plural(res.sinCosto.length, 'producto no tiene', 'productos no tienen')} costo en dólares (precio PY en la planilla) y no ${o.modo === 'tope' ? 'entran en el tope' : 'suman en el total'}: ${esc(res.sinCosto.map(l => l.nombre).join(', '))}.`);
     if (res.sinDato.length) msgs.push(`No figuran en la hoja de stock: ${esc(res.sinDato.map(l => l.nombre).join(', '))}.`);
@@ -5639,7 +6021,7 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
       ${msgs.length ? `<ul class="ped-msgs">${msgs.map(m => `<li>${m}</li>`).join('')}</ul>` : ''}
       ${lineas.length ? tabla(lineas) : `<div class="ok-box">${icon('i-check')}Con estas opciones no hace falta pedir nada: todo llega a los días pedidos.</div>`}
       ${resto.length ? `<details class="ped-mas"><summary>${U.plural(resto.length, 'producto que no hace falta pedir', 'productos que no hace falta pedir')}</summary>${tabla(resto)}</details>` : ''}
-      <p class="small muted ped-pie">Costo = precio en Paraguay + ${U.fmtPct(C.RECARGO_SERGIO_PY, 0)} de Sergio PY${res.dolar ? `, en pesos al dólar de la planilla (${$(res.dolar)})` : ''}. Venta por mes usada = ${esc(RV.pedido.pesoTxt(o.peso))}; con eso se calculan los días que cubre cada producto, por eso pueden diferir un poco de la tabla de arriba (que usa solo el reporte). Lo que viene en camino ya cuenta como stock.${res.hayPlanilla ? ' «En la planilla» es la «Cantidad a Comprar» de Consulta stock, para comparar.' : ''}</p>`;
+      <p class="small muted ped-pie">Costo = precio en Paraguay + ${U.fmtPct(C.RECARGO_SERGIO_PY, 0)} de Sergio PY${res.dolar ? `, en pesos al dólar de la planilla (${$(res.dolar)})` : ''}. Venta por mes usada = ${esc(RV.pedido.pesoTxt(o.peso))}; con eso se calculan los días que cubre cada producto, por eso pueden diferir un poco de la tabla de arriba (que usa solo tus ventas). Lo que viene en camino ya cuenta como stock.${res.hayPlanilla ? ' «En la planilla» es la «Cantidad a Comprar» de Consulta stock, para comparar.' : ''}</p>`;
   };
 
   // ---------- Envíos ----------
@@ -5875,7 +6257,7 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
     const fecha = d => esc(U.fmtDate(d)) + (d.getFullYear() !== anio ? '/' + String(d.getFullYear()).slice(2) : '');
     const tramos = `<div class="rows">${P.tramos.map(t => `<div><span>Sin vender hace ${rango(t)}</span><span class="r-v">${U.plural(t.n, 'producto', 'productos')}${t.valorARS != null ? `<span class="small muted"> · ${$(t.valorARS)}</span>` : ''}</span></div>`).join('')}</div>`;
     const tabla = `<div class="tbl-wrap" tabindex="0" role="region" aria-label="Stock parado por producto"><table class="tbl tbl-parado"><thead><tr><th class="l">Producto</th><th>Stock</th><th>Última venta</th><th>Días</th><th class="hide-sm">Plata</th></tr></thead><tbody>
-      ${P.filas.map(f => `<tr><td class="t-name l"><div class="t-name-main">${esc(f.nombre)}</div></td><td>${U.fmtInt(f.stock)}</td><td>${f.ult ? fecha(f.ult) : '<span class="small muted">no está</span>'}</td><td>${f.alMenos ? '+' : ''}${U.fmtInt(f.dias)}</td><td class="hide-sm">${f.valorARS != null ? $(f.valorARS) : '—'}</td></tr>`).join('')}</tbody></table></div>`;
+      ${P.filas.map(f => `<tr class="is-link" data-action="producto" data-key="${esc(f.key)}" data-dueno="${esc(R.perfil.id)}" tabindex="0"><td class="t-name l"><div class="t-name-main">${esc(f.nombre)}</div></td><td>${U.fmtInt(f.stock)}</td><td>${f.ult ? fecha(f.ult) : '<span class="small muted">no está</span>'}</td><td>${f.alMenos ? '+' : ''}${U.fmtInt(f.dias)}</td><td class="hide-sm">${f.valorARS != null ? $(f.valorARS) : '—'}</td></tr>`).join('')}</tbody></table></div>`;
     const sub = `${U.plural(P.filas.length, 'producto', 'productos')} sin vender hace ${C.STOCK_PARADO_TRAMOS[0]} días o más${P.valorARS != null ? ` · ${$(P.valorARS)} parados` : ''}`;
     const nota = `Días desde la última venta que hay en lo cargado (este reporte y los meses guardados en «Mes a mes» en esta compu, desde el ${fecha(P.desdeDatos)}) hasta el ${fecha(R.periodo.hasta)}. «+» y «no está»: no se vendió en todo lo cargado, así que son al menos esos días. Plata = stock × costo de la planilla.`;
     return `<div class="stock-parado">${R_.plegado('stock-parado', 'Stock parado por antigüedad', sub, `<div class="grid g-12"><div class="span-5">${tramos}<p class="small muted" style="margin-top:.625rem">${nota}</p></div><div class="span-7">${tabla}</div></div>`, '')}</div>`;
@@ -5976,45 +6358,69 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
     const sub = `${U.fmtInt(c.ventas)} de ${U.plural(p.ventas, 'venta', 'ventas')} vinieron por publicidad (${pct(P.parte, 0)})${c.ganancia != null ? ` · ${$(c.ganancia)} de ganancia` : ''}`;
     return R_.plegado('publicidad', 'Publicidad', sub, `${tabla}<p class="small muted" style="margin-top:.625rem">Lo que pagaste por los anuncios no está en el Excel de ventas: esta ganancia es antes de pagarlos. «Por publicidad» son las ventas que el Excel de Meli marca como «Venta por publicidad».</p>`, 'pleg-det');
   };
+  // Lo que muestra la calculadora «¿Qué margen querés?» (2.15.0): el precio para ese margen
+  R_.calcMargenTxt = (p, valor, op) => {
+    const txt = String(valor == null ? '' : valor).trim();
+    if (!txt) return '';
+    const m = U.num(txt) / 100;
+    if (!isFinite(m) || m < 0) return 'Poné un margen de 0 % para arriba.';
+    const precio = RV.engine.precioParaMargen(p, m);
+    if (precio == null) return `Con este margen no se llega: comisión, impuestos y cupones ya se llevan el ${pct((p.tasaCom || 0) + (p.tasaImp || 0) + (p.tasaCup || 0), 0)} del precio.`;
+    const r = RV.engine.gananciaAPrecio(p, precio);
+    return `Vendelo a <b>${$(precio)}</b>${r ? ` · te deja ${$(r.ganancia)} por unidad` : ''}${p.precioProm ? ` · hoy cobrás ${$(p.precioProm)} en promedio` : p.precioPublicadoPlanilla ? ` · en la planilla figura a ${$(p.precioPublicadoPlanilla)}` : ''}`;
+  };
   R_.drawer = (p, R) => {
     const op = R.opciones;
-    const s = R.stock && R.stock.filas.find(f => f.key === p.key);
-    const pedidos = (R.model.pedidos.get(p.key) || []).slice(-5).reverse();
+    const s = R.stock && (R.stock.filas.find(f => f.key === p.key) || R.stock.filas.find(f => U.mismoProducto(f.key, p.key)));
+    const pedidos = RV.engine.pedidosDe(R.model, p.key, p.dueño).slice(-5).reverse();
     const ventas = p.ventasLista.slice().reverse();
+    const sinV = !!p.sinVentas;
     // Con varias cuentas: cuántas unidades salieron por cada una
-    const porCta = R.cuentas.length > 1 ? [...U.groupBy(p.ventasLista, v => v.cuenta).entries()].map(([c, arr]) => `${c} ${U.fmtInt(U.sum(arr, v => v.unidades))} u`).join(' · ') : p.cuentas.join(', ');
+    const porCta = sinV ? 'sin ventas en este reporte' : R.cuentas.length > 1 ? [...U.groupBy(p.ventasLista, v => v.cuenta).entries()].map(([c, arr]) => `${c} ${U.fmtInt(U.sum(arr, v => v.unidades))} u`).join(' · ') : p.cuentas.join(', ');
+    const otros = p.otrosVendedores && p.otrosVendedores.length ? `<p class="small muted">En TITULARES este producto también figura para ${esc(RV.app.listaY(p.otrosVendedores.map(x => RV.engine.perfilDe(x).nombre)))}. ${p.esMio ? 'Las ventas de tus cuentas se cuentan como tuyas (está en tu columna), salvo que EXCEPCIONES diga otra cosa.' : `Se tomó como de ${esc(RV.engine.perfilDe(p.dueño).nombre)}.`}</p>` : '';
+    const tasasTxt = sinV ? `Sin ventas propias, usa el promedio de ${p.tasasDe === 'periodo' ? 'tus ventas de este período' : 'la planilla'}: comisión ${pct(p.tasaCom)}, impuestos ${pct(p.tasaImp)}, cupones ${pct(p.tasaCup)} y envío ${$(p.envioU)} por unidad${p.tasasDe === 'periodo' ? ' (el correo más común)' : ''}; costo ${$(p.costoU)}.`
+      : `Con este período: comisión ${pct(p.tasaCom)}, impuestos ${pct(p.tasaImp)}, cupones ${pct(p.tasaCup)}, envío ${$(p.envioU)} por unidad y costo ${$(p.costoU)}.`;
     return `<div class="drawer-h"><div><div class="small muted">${p.esMio ? 'Tu producto' : 'Producto de ' + esc(RV.engine.perfilDe(p.dueño).nombre)} · ${esc(porCta)}</div><h3 id="drawer-title">${esc(p.nombre)}</h3></div>
       <button class="icon-btn" type="button" data-action="cerrar-drawer" aria-label="Cerrar">${icon('i-x')}</button></div>
       <div class="drawer-b" tabindex="0">
+        ${sinV ? `<div class="ok-box">${icon('i-info')}<span>No tuvo ventas en este reporte. Abajo, lo que dice la planilla y las calculadoras de precio y margen.</span></div>
         <div class="stats">
+          <div class="stat"><div class="stat-l">Costo por unidad</div><div class="stat-v">${$(p.costoU)}</div><div class="stat-s">${p.costoFuente === 'pedido' ? 'del último pedido' : p.costoFuente === 'titulares' ? 'de TITULARES' : 'sin costo en la planilla'}</div></div>
+          <div class="stat"><div class="stat-l">Precio en la planilla</div><div class="stat-v">${$(p.precioPublicadoPlanilla)}</div><div class="stat-s">${p.margenPlanilla != null ? `margen ${pct(p.margenPlanilla)} según la planilla` : 'PRECIO PUBLICADO de TITULARES'}</div></div>
+          <div class="stat"><div class="stat-l">Stock</div><div class="stat-v">${s && s.total != null ? U.fmtInt(s.total) : '—'}</div><div class="stat-s">${s ? esc(labelStock(s.estado)) : 'no figura en la hoja de stock'}</div></div>
+          <div class="stat"><div class="stat-l">Para ${pct(op.objetivo, 0)} de margen</div><div class="stat-v">${$(p.precioObjetivo)}</div><div class="stat-s">${p.precioVerde ? `${$c(p.precioVerde)} para ${pct(op.verde, 0)}` : ''}</div></div>
+        </div>` : `<div class="stats">
           <div class="stat"><div class="stat-l">Unidades</div><div class="stat-v">${U.fmtInt(p.unidades)}</div><div class="stat-s">${U.plural(p.ventas, 'venta', 'ventas')}</div></div>
           <div class="stat"><div class="stat-l">Ganancia</div><div class="stat-v">${$(p.ganancia)}</div><div class="stat-s">${$(p.gananciaU)} por unidad</div></div>
           <div class="stat"><div class="stat-l">Precio promedio</div><div class="stat-v">${$(p.precioProm)}</div><div class="stat-s">${p.precioMin ? `${$(p.precioMin)} a ${$(p.precioMax)}` : ''}</div></div>
           <div class="stat"><div class="stat-l">Margen</div><div class="stat-v">${pct(p.margen)}</div><div class="stat-s">${RV.render.pillMargen(p.margen, op)}</div></div>
-        </div>
-        ${R_.contraAnterior(p, R)}
-        ${R_.comisionLinea(p, R)}
+        </div>`}
+        ${otros}
+        ${sinV ? '' : R_.contraAnterior(p, R)}
+        ${sinV ? '' : R_.comisionLinea(p, R)}
         ${p.costoU != null ? `<div class="calc">
           <label for="calc-precio">¿Y si lo vendés a…?</label>
-          <div class="calc-row"><input id="calc-precio" type="number" inputmode="numeric" step="100" min="0" value="${Math.round(p.precioUlt || p.precioProm || 0)}" data-key="${esc(p.key)}"><div class="calc-out" id="calc-out"></div></div>
-          <div class="small">Con este período: comisión ${pct(p.tasaCom)}, impuestos ${pct(p.tasaImp)}, cupones ${pct(p.tasaCup)}, envío ${$(p.envioU)} por unidad y costo ${$(p.costoU)}.${p.precioObjetivo ? ` Para ${pct(op.objetivo, 0)}: <b>${$(p.precioObjetivo)}</b>.` : ''}</div>
-        </div>` : ''}
+          <div class="calc-row"><input id="calc-precio" type="number" inputmode="numeric" step="100" min="0" value="${Math.round(p.precioUlt || p.precioProm || p.precioObjetivo || 0)}" data-key="${esc(p.key)}"><div class="calc-out" id="calc-out" aria-live="polite"></div></div>
+          <label for="calc-margen">¿Qué margen querés?</label>
+          <div class="calc-row"><span class="calc-pct"><input id="calc-margen" type="number" inputmode="decimal" step="1" min="0" max="90" value="${Math.round(op.objetivo * 100)}"><span aria-hidden="true">%</span></span><div class="calc-out" id="calc-margen-out" aria-live="polite">${R_.calcMargenTxt(p, Math.round(op.objetivo * 100), op)}</div></div>
+          <div class="small">${tasasTxt}</div>
+        </div>` : sinV ? `<p class="small muted">Sin costo en la planilla (ni en PEDIDOS ni en TITULARES): cargalo para ver a qué precio venderlo.</p>` : ''}
         ${p.margenFormula != null ? `<div class="rows">
-          <div><span>Margen real del período</span><span class="r-v">${pct(p.margen)}</span></div>
-          <div><span>Según la fórmula de TITULARES (15% + ${$(C.PLANILLA_ENVIO_FIJO)})</span><span class="r-v">${pct(p.margenFormula)}</span></div>
+          ${sinV ? '' : `<div><span>Margen real del período</span><span class="r-v">${pct(p.margen)}</span></div>`}
+          <div><span>Según la fórmula de TITULARES (15% + ${$(C.PLANILLA_ENVIO_FIJO)})${sinV && p.precioPublicadoPlanilla ? `, a ${$(p.precioPublicadoPlanilla)}` : ''}</span><span class="r-v">${pct(p.margenFormula)}</span></div>
           ${p.margenPlanilla != null ? `<div><span>Margen que figura en la planilla${p.precioPublicadoPlanilla ? ` (a ${$(p.precioPublicadoPlanilla)})` : ''}</span><span class="r-v">${pct(p.margenPlanilla)}</span></div>` : ''}
         </div>` : ''}
-        ${(() => { const q = R.model.cuotas && R.model.cuotas.get(p.key); if (!q) return '';
+        ${(() => { const q = R.model.cuotas && (R.model.cuotas.get(p.key + '|' + p.dueño) || R.model.cuotas.get(p.key)); if (!q) return '';
           return `<div><div class="card-h" style="margin-bottom:.375rem"><h3 style="font-size:.875rem">Cuotas (pestaña CUOTAS)</h3><span class="tag">${esc(q.cuotas)}</span></div>
           <div class="rows">${q.contado ? `<div><span>Precio contado en la planilla${q.rent != null ? ` (${pct(q.rent)} de rentabilidad)` : ''}</span><span class="r-v">${$(q.contado)}</span></div>` : ''}
           ${q.minimo ? `<div><span>Mínimo en cuotas para ganar lo mismo</span><span class="r-v">${$(q.minimo)}</span></div>` : ''}
           ${q.minimo && p.precioProm ? `<div><span>Lo que cobraste en promedio este período</span><span class="r-v">${$(p.precioProm)}</span></div>` : ''}</div>
           ${R_.clasicaPremium(p, q)}</div>`; })()}
-        ${R_.publicidad(p)}
+        ${sinV ? '' : R_.publicidad(p)}
         ${R_.preciosMes(p, R)}
         ${p.ventasLista.length >= 2 ? `<div><div class="card-h" style="margin-bottom:.375rem"><h3 style="font-size:.875rem">Precio de cada venta</h3><span class="small muted">por unidad${p.ganancia != null ? ' · color según margen' : ''}</span></div><div class="chart" id="ch-precio"></div>
           ${p.ganancia != null ? `<div class="chart-legend"><span><i class="k-neg"></i>&lt; ${pct(op.rojo, 0)}</span><span><i class="k-warn"></i>${pct(op.rojo, 0)}–${pct(op.verde, 0)}</span><span><i class="k-good"></i>≥ ${pct(op.verde, 0)}</span>${p.precioObjetivo ? `<span>línea: precio para ${pct(op.objetivo, 0)}</span>` : ''}</div>` : ''}</div>` : ''}
-        <div><div class="card-h" style="margin-bottom:.375rem"><h3 style="font-size:.875rem">Unidades por día</h3></div><div class="chart" id="ch-drawer"></div></div>
+        ${sinV ? '' : `<div><div class="card-h" style="margin-bottom:.375rem"><h3 style="font-size:.875rem">Unidades por día</h3></div><div class="chart" id="ch-drawer"></div></div>`}
         ${s ? `<div><div class="card-h" style="margin-bottom:.375rem"><h3 style="font-size:.875rem">Stock</h3>${pillStock(s.estado)}</div>
           <div class="rows"><div><span>En stock${s.camino ? ' (con lo que viene en camino)' : ''}</span><span class="r-v">${s.total != null ? U.fmtInt(s.total) : '—'}</span></div>
           <div><span>Se vende por semana</span><span class="r-v">${U.fmtDec(s.ventaDia * 7, 1)}</span></div>
@@ -6024,10 +6430,10 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
         <div><div class="card-h" style="margin-bottom:.375rem"><h3 style="font-size:.875rem">Costo</h3><span class="small muted">${p.costoFuente === 'pedido' ? 'del último pedido' : p.costoFuente === 'titulares' ? 'de TITULARES' : 'sin costo'}</span></div>
           ${pedidos.length ? `<div class="rows">${pedidos.map(x => `<div><span>${esc(U.fmtDateFull(x.fecha))}${x.cantidad ? ` · ${U.plural(x.cantidad, 'unidad', 'unidades')}` : ''}${x.proveedor ? ' · ' + esc(x.proveedor) : ''}</span><span class="r-v">${x.precioPY ? 'US$' + U.fmtDec(x.precioPY, 2) + ' → ' : ''}${$(x.costo)}</span></div>`).join('')}</div>` : `<p class="small muted">Sin pedidos cargados: se usa ${p.costoU != null ? $(p.costoU) : 'nada'} de TITULARES.</p>`}
           ${p.linkPY ? `<p class="small" style="margin-top:.5rem"><a href="${esc(p.linkPY)}" target="_blank" rel="noopener">Ver en Paraguay ↗</a></p>` : ''}</div>
-        <div><div class="card-h" style="margin-bottom:.375rem"><h3 style="font-size:.875rem">Cada venta</h3><span class="small muted">precio · ganancia</span></div>
+        ${sinV ? '' : `<div><div class="card-h" style="margin-bottom:.375rem"><h3 style="font-size:.875rem">Cada venta</h3><span class="small muted">precio · ganancia</span></div>
           <div class="sales-list">${ventas.map(v => `<div><span class="muted">${esc(U.fmtDateTime(v.fecha))}</span><span>${v.esFlex ? '<span class="tag">flex</span>' : '<span class="tag">correo</span>'} ${v.unidades > 1 ? `<span class="tag">${v.unidades} u</span>` : ''} ${v.ads ? '<span class="tag">publi</span>' : ''} <span class="small muted">${esc(v.cuenta)}</span></span><span class="num">${$(v.unidades ? v.ingresos / v.unidades : v.ingresos)}</span><span class="num" style="font-weight:700">${$(v.ganancia)}</span></div>`).join('')}</div></div>
         <div><div class="card-h" style="margin-bottom:.375rem"><h3 style="font-size:.875rem">Publicaciones</h3><span class="small muted">unidades · precio prom.</span></div>
-          <div class="rows">${p.porPublicacion.map(x => `<div><span>${esc(x.titulo)}${x.ids.length ? `<br><span class="small muted mono">${esc(x.ids.join(' · '))}</span>` : ''}</span><span class="r-v">${U.fmtInt(x.unidades)} · ${$c(x.unidades ? x.facturacion / x.unidades : 0)}</span></div>`).join('')}</div></div>
+          <div class="rows">${p.porPublicacion.map(x => `<div><span>${esc(x.titulo)}${x.ids.length ? `<br><span class="small muted mono">${esc(x.ids.join(' · '))}</span>` : ''}</span><span class="r-v">${U.fmtInt(x.unidades)} · ${$c(x.unidades ? x.facturacion / x.unidades : 0)}</span></div>`).join('')}</div></div>`}
       </div>`;
   };
 })(globalThis.RV = globalThis.RV || {});
@@ -6325,7 +6731,7 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
       // ---------- Stock ----------
       if (R.stock) {
         const wsS = wb.addWorksheet('Stock', { views: [{ state: 'frozen', ySplit: 1 }] });
-        tabla(wsS, 1, ['Producto', 'Stock total', 'En camino', R.stock.ventana ? `Vendidas en los últimos ${R.stock.ventana.dias} días` : 'Vendidas en el período', 'Por semana', 'Cobertura (días, ritmo del reporte)', 'Estado', 'Valor a costo', 'Venta mensual (planilla)', 'Venta mensual (reporte)', 'Costo de compra US$ por unidad'],
+        tabla(wsS, 1, ['Producto', 'Stock total', 'En camino', R.stock.ventana ? `Vendidas en los últimos ${R.stock.ventana.dias} días` : 'Vendidas en el período', 'Por semana', 'Cobertura (días, ritmo de tus ventas)', 'Estado', 'Valor a costo', 'Venta mensual (planilla)', 'Venta mensual (tus ventas)', 'Costo de compra US$ por unidad'],
           R.stock.filas.map(s => [s.nombre, s.total, s.camino, s.vendidas, s.ventaDia * 7, s.cobertura, RV.render.labelStock(s.estado), s.valorARS, s.ventaMesPlanilla, s.ventaMesReal, s.costoUSDu]),
           { 1: INT, 2: INT, 3: INT, 4: '0.0', 5: '0', 7: MONEY, 8: '0', 9: '0', 10: '"US$"#,##0.00' });
         wsS.columns.forEach((c, i) => { c.width = i === 0 ? 46 : 15; });
@@ -6338,7 +6744,7 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
           wpd.getCell('A1').value = `Pedido ${RV.pedido.MODOS[o.modo].corto} — ${R.perfil.nombre}`; wpd.getCell('A1').font = font({ size: 13, bold: true });
           wpd.getCell('A2').value = `${RV.pedido.descripcion(o, res.diasMin)} Venta mensual: ${RV.pedido.pesoTxt(o.peso)}.${o.modo === 'tope' ? ` Tope: US$${U.fmtDec(res.topeUSD || 0, 0)}.` : ''}`;
           wpd.getCell('A2').font = font({ color: { argb: 'FF6F7B75' } });
-          const finP = tabla(wpd, 4, ['Producto', 'Estado', 'Stock', 'Venta mensual usada', 'Venta mensual (planilla)', 'Venta mensual (reporte)', 'Cubre hoy (días)', 'Pedir', 'Costo US$ por unidad', 'Costo US$', 'Costo en pesos', 'Cubre después (días)', 'Cantidad a comprar (planilla)'],
+          const finP = tabla(wpd, 4, ['Producto', 'Estado', 'Stock', 'Venta mensual usada', 'Venta mensual (planilla)', 'Venta mensual (tus ventas)', 'Cubre hoy (días)', 'Pedir', 'Costo US$ por unidad', 'Costo US$', 'Costo en pesos', 'Cubre después (días)', 'Cantidad a comprar (planilla)'],
             res.conPedido.map(l => [l.nombre, RV.render.labelStock(l.estado), l.stock, l.mes, l.mesPlanilla, l.mesReporte, l.cobertura, l.qty, l.costoUSDu, l.costoUSD, l.costoARS, l.coberturaDespues, l.planilla]),
             { 2: INT, 3: '0.0', 4: '0', 5: '0', 6: '0', 7: INT, 8: '"US$"#,##0.00', 9: USD, 10: MONEY, 11: '0', 12: INT });
           const t = wpd.getRow(finP);
@@ -6394,14 +6800,15 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
   // ---------- Más datos de cada mes (2.8.0, BASE-2): por producto, lo justo para comparar meses ----------
   // Nada de compradores. k producto, d dueño, u unidades, v ventas, f facturación, g ganancia (null sin costo),
   // c comisión de Meli (% del precio, sin cargo fijo ni cuotas), ct comisión total (%), ads ventas por publicidad,
-  // ult última venta (AAAA-MM-DD). El precio promedio es f ÷ u.
+  // ult última venta (AAAA-MM-DD), un unidades fuera de las fechas fuertes (2.15.0, para el pedido). El precio promedio es f ÷ u.
   const r4 = x => Math.round(x * 10000) / 10000;
   H.productosDe = (validas) => {
     const out = [];
     for (const [, arr] of U.groupBy(validas.filter(v => v.producto), v => v.producto + '|' + v.dueño)) {
       const f = U.sum(arr, v => v.ingresos), conC = arr.filter(v => v.ganancia != null);
       let ult = null; for (const v of arr) if (v.fecha && (!ult || v.fecha > ult)) ult = v.fecha;
-      out.push({ k: arr[0].producto, d: arr[0].dueño, u: U.sum(arr, v => v.unidades), v: arr.length, f: Math.round(f),
+      const un = U.sum(arr.filter(v => v.fecha && !RV.engine.esFechaFuerte(v.fecha)), v => v.unidades);
+      out.push({ k: arr[0].producto, d: arr[0].dueño, u: U.sum(arr, v => v.unidades), un, v: arr.length, f: Math.round(f),
         g: conC.length ? Math.round(U.sum(conC, v => v.ganancia)) : null,
         c: f > 0 ? r4(-U.sum(arr, v => v.cargo || 0) / f) : null,
         ct: f > 0 ? r4(-U.sum(arr, v => (v.cargo || 0) + (v.costoFijo || 0) + (v.costoCuotas || 0)) / f) : null,
@@ -6409,12 +6816,14 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
     }
     return out.sort((a, b) => b.f - a.f);
   };
+  // Días del período que no caen en fechas fuertes (2.15.0)
+  const diasNormales = (desde, dias) => { let n = 0; for (let i = 0; i < dias; i++) if (!RV.engine.esFechaFuerte(U.addDays(U.startOfDay(desde), i))) n++; return n; };
   H.resumir = (R) => {
     const K = R.kpis, P = R.periodo;
     const ctas = R.cuentas.map(c => c.cuenta).sort();
     return {
       id: `${R.perfil.id}|${clave(ctas)}|${U.dayKey(P.desde)}|${U.dayKey(P.hasta)}`,
-      perfil: R.perfil.id, cuentas: ctas, desde: U.dayKey(P.desde), hasta: U.dayKey(P.hasta), dias: P.dias, guardado: Date.now(),
+      perfil: R.perfil.id, cuentas: ctas, desde: U.dayKey(P.desde), hasta: U.dayKey(P.hasta), dias: P.dias, dn: diasNormales(P.desde, P.dias), guardado: Date.now(),
       facturacion: K.facturacion, factMia: K.factMiaConCosto, bruta: K.gananciaBruta, neta: netaProporcional(R), gastos: K.gastos,
       gastosModo: 'proporcional', margen: K.margen, unidades: K.unidades, pedidos: K.pedidos,
       top: R.productos.filter(p => p.esMio && p.ganancia != null).slice(0, 8).map(p => ({ k: p.key, n: p.nombre, u: p.unidades, g: Math.round(p.ganancia), m: p.margen })),
@@ -6445,7 +6854,7 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
       const desde = new Date(Math.max(new Date(m.anio, m.mes, 1), P.desde)), hasta = new Date(Math.min(new Date(m.anio, m.mes, m.diasEnMes), P.hasta));
       return {
         id: `${R.perfil.id}|${clave(ctas)}|${U.dayKey(desde)}|${U.dayKey(hasta)}`,
-        perfil: R.perfil.id, cuentas: ctas, desde: U.dayKey(desde), hasta: U.dayKey(hasta), dias: m.diasCubiertos, guardado: Date.now(),
+        perfil: R.perfil.id, cuentas: ctas, desde: U.dayKey(desde), hasta: U.dayKey(hasta), dias: m.diasCubiertos, dn: diasNormales(desde, m.diasCubiertos), guardado: Date.now(),
         facturacion: U.sum(val, v => v.ingresos), factMia: fact, bruta, neta: bruta + dev - gastos, gastos,
         gastosModo: 'proporcional', margen: fact ? bruta / fact : null, unidades: U.sum(val, v => v.unidades), pedidos: val.length,
         top: topDe(val), aprox: m.aprox ? true : undefined, deVarios: true,
@@ -7023,6 +7432,10 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
         novedad: { titulo: 'Nuevo: stock parado', texto: `En «Stock y reposición»: qué productos no se venden hace ${C.STOCK_PARADO_TRAMOS[0]} días o más y cuánta plata hay ahí.` } },
       { id: 'pedido', desde: '2.3.0', donde: '#pedido', titulo: 'Stock y pedido',
         texto: 'Elegí el pedido (óptimo, mínimo, completo o con tope) y los días. Después, «Copiar para WhatsApp».' },
+      // 2.15.0: la venta del stock y del pedido sale de todo lo cargado, con más peso lo más reciente
+      { id: 'venta-ponderada', desde: '2.15.0', donde: ['#pedido', '#stock'], titulo: 'De dónde sale la venta',
+        texto: 'El pedido usa este reporte y los meses guardados, con más peso lo más reciente.',
+        novedad: { titulo: 'Nuevo: un pedido más estable', texto: 'Usa este reporte y los meses guardados, con más peso lo más reciente.' } },
       { id: 'envios', desde: '2.0.0', donde: '#envios', titulo: 'Envíos, cobros y terceros',
         texto: c => c.R && c.R.modo && c.R.modo.mp
           ? 'Después: envíos por zona, la plata de Mercado Pago (liberada y por liberar) y lo de cada socio.'
@@ -8058,15 +8471,17 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
   app.calcNuevo = () => { const o = $id('cn-out'); if (o && st.report) o.innerHTML = RV.render.calcNuevoTxt(st.report, st.calcNuevo); };
   app.abrirProducto = (key, dueño) => {
     const R = st.report; if (!R) return;
-    const p = R.productos.find(x => x.key === key && (!dueño || x.dueño === dueño)) || R.productos.find(x => x.key === key);
-    if (!p) return;
+    // 2.15.0: un producto de la planilla sin ventas en el período también abre (con lo que dice la planilla y las calculadoras)
+    const p = R.productos.find(x => x.key === key && (!dueño || x.dueño === dueño)) || (!dueño || dueño === R.perfil.id ? null : R.productos.find(x => x.key === key))
+      || RV.engine.productoPlanilla(R, key, dueño || R.perfil.id) || R.productos.find(x => x.key === key);
+    if (!p) { toast('Ese producto no está en la planilla ni tiene ventas en este reporte.'); return; }
     ultimoFoco = document.activeElement;
     const d = $id('drawer');
     d.innerHTML = RV.render.drawer(p, R);
     d.hidden = false; $id('scrim').hidden = false;
     document.body.style.overflow = 'hidden';
     const el = $id('ch-drawer');
-    if (el) CH.columns(el, {
+    if (el && p.serie && p.serie.length) CH.columns(el, {
       height: 150, fmtAxis: v => U.fmtInt(v), aria: `Unidades vendidas por día de ${p.nombre}`,
       data: p.serie.map((v, i) => { const f = U.addDays(R.periodo.desde, i); return { v, xl: String(f.getDate()), weekend: f.getDay() === 0 || f.getDay() === 6, f }; }),
       tooltip: (x) => `<div class="tt-h">${U.esc(U.fmtDate(x.f))}</div>${CH.tipRow('unidades', U.fmtInt(x.v), 'var(--tot)')}`,
@@ -8086,17 +8501,43 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
         tooltip: q => `<div class="tt-h">${U.esc(U.fmtDateTime(q.t))}</div>${CH.tipRow('precio por unidad', U.fmtMoney(q.y))}${q.u > 1 ? CH.tipRow('unidades', U.fmtInt(q.u)) : ''}${q.g != null ? CH.tipRow('ganancia', U.fmtMoney(q.g)) + CH.tipRow('margen', U.fmtPct(q.m)) : ''}${CH.tipRow(q.v.esFlex ? 'flex' : 'correo', U.esc(q.v.cuenta || ''))}`,
       });
     }
-    const inp = $id('calc-precio');
+    // Las dos calculadoras (2.15.0): precio → ganancia y margen; margen → precio
+    const inp = $id('calc-precio'), inpM = $id('calc-margen');
     const calc = () => {
-      const precio = U.num(inp.value);
-      const out = $id('calc-out');
-      if (!precio) { out.textContent = ''; return; }
-      const gan = precio * (1 - p.tasaCom - p.tasaImp - p.tasaCup) - p.envioU - p.costoU;
-      const m = gan / precio;
-      out.innerHTML = `Ganancia <b>${U.esc(U.fmtMoney(gan))}</b> por unidad · ${RV.render.pillMargen(m, R.opciones)}`;
+      const out = $id('calc-out'); if (!out) return;
+      const r = RV.engine.gananciaAPrecio(p, U.num(inp.value));
+      out.innerHTML = r ? `Ganancia <b>${U.esc(U.fmtMoney(r.ganancia))}</b> por unidad · ${RV.render.pillMargen(r.margen, R.opciones)}` : '';
     };
+    const calcM = () => { const out = $id('calc-margen-out'); if (out) out.innerHTML = RV.render.calcMargenTxt(p, inpM.value, R.opciones); };
     if (inp) { inp.addEventListener('input', calc); calc(); }
+    if (inpM) { inpM.addEventListener('input', calcM); calcM(); }
     d.querySelector('[data-action="cerrar-drawer"]').focus();
+  };
+  // 2.15.0: un producto que no está ni en la planilla ni en el reporte (lo que escribís queda solo mientras la página está abierta)
+  app.abrirNuevo = (nombre) => {
+    const R = st.report; if (!R) return;
+    st.productoNuevo = Object.assign({}, st.productoNuevo || {}, nombre && !(st.productoNuevo && st.productoNuevo.nombre) ? { nombre } : {});
+    ultimoFoco = document.activeElement;
+    const d = $id('drawer');
+    d.innerHTML = RV.render.drawerNuevo(R, st.productoNuevo);
+    d.hidden = false; $id('scrim').hidden = false;
+    document.body.style.overflow = 'hidden';
+    const leer = () => {
+      const v = st.productoNuevo = {
+        nombre: $id('pn-nombre').value, costo: $id('pn-costo').value, moneda: $id('pn-moneda').value,
+        envio: $id('pn-envio').value, precio: $id('calc-precio').value, margen: $id('calc-margen').value,
+      };
+      const p = RV.engine.productoManual(R, v);
+      const t = $id('drawer-title'); if (t) t.textContent = p.nombre;
+      const ct = $id('pn-costo-txt'); if (ct) ct.textContent = RV.render.nuevoCostoTxt(p);
+      const r = RV.engine.gananciaAPrecio(p, U.num(v.precio));
+      $id('calc-out').innerHTML = r ? `Ganancia <b>${U.esc(U.fmtMoney(r.ganancia))}</b> por unidad · ${RV.render.pillMargen(r.margen, R.opciones)}` : '';
+      $id('calc-margen-out').innerHTML = p.costoU != null ? RV.render.calcMargenTxt(p, v.margen, R.opciones) : '';
+    };
+    for (const id of ['pn-nombre', 'pn-costo', 'pn-envio', 'calc-precio', 'calc-margen']) $id(id).addEventListener('input', leer);
+    $id('pn-moneda').addEventListener('change', leer);
+    leer();
+    $id('pn-costo').focus();
   };
   // Panel lateral genérico
   const abrirPanel = (html) => {
@@ -8315,6 +8756,7 @@ html.rc-abajo .toast { bottom: calc(var(--rc-alto, 10rem) + 1.75rem + env(safe-a
     else if (act === 'metrica') { st.metrica = a.dataset.k; renderSeccion('evolucion', RV.render.evolucion(st.report, st)); montarGraficos(st.report); }
     else if (act === 'scope') { st.scope = a.dataset.k; renderSeccion('productos', RV.render.productos(st.report, st)); montarGraficos(st.report); }
     else if (act === 'producto') app.abrirProducto(a.dataset.key, a.dataset.dueno);
+    else if (act === 'producto-nuevo') app.abrirNuevo(st.busqueda || '');
     else if (act === 'cn-envio') { const i = $id('cn-envio'); if (i) { i.value = a.dataset.v; st.calcNuevo = Object.assign({}, st.calcNuevo, { envio: a.dataset.v }); app.calcNuevo(); } }
     else if (act === 'cerrar-drawer') app.cerrarDrawer();
     else if (act === 'todos-insights') { const m = $id('ins-more'); m.hidden = !m.hidden; a.textContent = m.hidden ? `Ver los ${st.report.insights.length}` : 'Ver menos'; }
